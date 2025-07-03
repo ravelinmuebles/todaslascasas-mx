@@ -8,13 +8,13 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# CONFIGURACIÓN POSTGRESQL AWS RDS con pg8000
+# CONFIGURACIÓN POSTGRESQL AWS RDS usando variables de entorno
 DB_CONFIG = {
-    'host': 'todaslascasas-postgres.cqpcyeqa0uqj.us-east-1.rds.amazonaws.com',
-    'database': 'propiedades_db',
-    'user': 'pabloravel',
-    'password': 'Todaslascasas2025',
-    'port': 5432
+    'host': os.environ.get('DB_HOST', 'localhost'),
+    'database': os.environ.get('DB_NAME', 'propiedades_db'),
+    'user': os.environ.get('DB_USER', 'pabloravel'),
+    'password': os.environ.get('DB_PASSWORD', ''),
+    'port': int(os.environ.get('DB_PORT', 5432))
 }
 
 def lambda_handler(event, context):
