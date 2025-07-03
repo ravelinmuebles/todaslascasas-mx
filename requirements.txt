@@ -1,0 +1,17 @@
+# 📦 DEPENDENCIAS TODASLASCASAS.MX
+
+# Base de datos
+psycopg2-binary==2.9.10
+
+# Web framework
+Flask==3.0.0
+Flask-CORS==4.0.0
+
+# Procesamiento de datos
+beautifulsoup4==4.12.3
+lxml==5.1.0
+requests==2.31.0
+
+# Utilidades
+python-dotenv==1.0.1
+dateutils==0.6.12

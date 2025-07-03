@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📍 Todas las Casas - Catálogo de Propiedades</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        /* HEADER */
+        .header {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 95%;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .user-info {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #f3f4f6;
+            border-radius: 8px;
+        }
+
+        .user-info.show {
+            display: flex;
+        }
+
+        .logout-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        /* LAYOUT PRINCIPAL - 100% ANCHO */
+        .main-container {
+            max-width: 95%;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 2rem;
+        }
+
+        /* SIDEBAR DE FILTROS */
+        .filters-sidebar {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+
+        .filters-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            color: #1f2937;
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .filter-input, .filter-select {
+            width: 100%;
+            padding: 0.7rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: white;
+        }
+
+        .filter-input:focus, .filter-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .price-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .checkbox-group {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 0.5rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 0.3rem 0;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 0.5rem;
+        }
+
+        .checkbox-item label {
+            font-size: 0.85rem;
+            color: #4b5563;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .clear-filters {
+            width: 100%;
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 0.7rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+        .clear-filters:hover {
+            background: #b91c1c;
+        }
+
+        /* ÁREA DE PROPIEDADES */
+        .properties-area {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .properties-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .properties-count {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .sort-select {
+            padding: 1rem 1.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: white;
+            appearance: none;
+            cursor: pointer;
+            min-width: 200px;
+            font-weight: 500;
+        }
+
+        .sort-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .view-toggle {
+            display: flex;
+            background: #f3f4f6;
+            border-radius: 6px;
+            padding: 0.2rem;
+        }
+
+        .view-btn {
+            padding: 0.5rem 0.8rem;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .view-btn.active {
+            background: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* GRID DE PROPIEDADES - 3 COLUMNAS POR DEFECTO */
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* VISTA LISTA */
+        .properties-grid.list-view {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .properties-grid.list-view .property-card {
+            display: flex;
+            flex-direction: row;
+            height: auto;
+            min-height: 200px;
+        }
+
+        .properties-grid.list-view .property-image {
+            width: 300px;
+            height: 200px;
+            flex-shrink: 0;
+        }
+
+        .properties-grid.list-view .property-content {
+            flex: 1;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .properties-grid.list-view .description-content {
+            display: block !important;
+            margin-top: 0.8rem;
+            color: #6b7280;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            max-height: none;
+            overflow: visible;
+            text-overflow: none;
+        }
+
+        .properties-grid.list-view .description-toggle {
+            display: none;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 1600px) {
+            .properties-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .properties-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .properties-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .filters-sidebar {
+                position: static;
+            }
+            }
+            
+        /* TARJETAS DE PROPIEDADES */
+        .property-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: auto;
+        }
+
+        .property-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .property-image {
+            position: relative;
+            height: 200px;
+            overflow: hidden;
+        }
+
+        .property-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .property-card:hover .property-image img {
+            transform: scale(1.05);
+        }
+
+        .property-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #2563eb;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .property-content {
+            padding: 1.25rem;
+        }
+
+        .property-price {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #059669;
+            margin-bottom: 0.5rem;
+        }
+
+        .property-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .property-location {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .property-details {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .property-details span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .property-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        .property-type {
+            background: #f3f4f6;
+            color: #374151;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .property-id {
+            font-size: 0.7rem;
+            color: #9ca3af;
+            font-family: monospace;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* BUSCADOR MEJORADO */
+        .search-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: white;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-placeholder {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 0.3rem;
+        }
+
+        .property-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-view {
+            flex: 1;
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-view:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-favorite {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.6rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-favorite:hover {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .btn-favorite.active {
+            background: #fbbf24;
+            border-color: #f59e0b;
+            color: white;
+        }
+
+        /* LOADING Y ESTADOS */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .no-results h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* PAGINACIÓN */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .pagination button {
+            padding: 0.6rem 1rem;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .pagination button:hover {
+            background: #f3f4f6;
+        }
+
+        .pagination button.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* MODALES */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">📍 Todas las Casas</div>
+            <div class="header-actions">
+                <div class="user-info" id="userInfo">
+                    <span id="userName">Usuario</span>
+                    <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+                </div>
+                <button class="btn btn-secondary" onclick="showFavorites()">⭐ Mis Favoritos</button>
+                <button class="btn btn-secondary" onclick="showLeads()">🔥 Mis Leads</button>
+                <button class="btn btn-secondary" onclick="showRavelLeads()">🏆 Ravel Leads</button>
+                <button class="btn btn-secondary" onclick="showAdminModal()">⚙️ Admin</button>
+                <button class="btn btn-primary" onclick="iniciarLoginGoogle()">🔐 Login Google</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="main-container">
+        <!-- SIDEBAR DE FILTROS -->
+        <aside class="filters-sidebar">
+            <h2 class="filters-title">🔍 Filtros</h2>
+            
+            <!-- NUEVO: Control de Paginación -->
+            <div class="filter-group">
+                <label class="filter-label">📄 Propiedades por página</label>
+                <select class="filter-select" id="pagination-select" onchange="changePaginationLimit(parseInt(this.value))">
+                    <option value="100">100 propiedades</option>
+                    <option value="200">200 propiedades</option>
+                    <option value="400">400 propiedades</option>
+                    <option value="500">500 propiedades</option>
+                    <option value="6160">Todas las propiedades</option>
+                </select>
+            </div>
+            
+            <!-- Filtro de Búsqueda -->
+            <div class="filter-group">
+                <label class="filter-label">🔍 Buscar</label>
+                <div class="search-container">
+                    <input type="text" class="search-input" id="search-input" placeholder="ID, descripción, ubicación, precio...">
+                    <div class="search-placeholder">Busca por ID, contenido, ciudad o precio</div>
+                </div>
+            </div>
+            
+            <!-- Filtro de Precio -->
+            <div class="filter-group">
+                <label class="filter-label">Rango de Precio</label>
+                <div class="price-range">
+                    <input type="number" class="filter-input" id="price-min" placeholder="Mín">
+                    <input type="number" class="filter-input" id="price-max" placeholder="Máx">
+                </div>
+            </div>
+
+            <!-- Tipo de Operación -->
+            <div class="filter-group">
+                <label class="filter-label">Tipo de Operación</label>
+                <div class="checkbox-group" id="operacion-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="op-venta" value="Venta">
+                        <label for="op-venta">Venta</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="op-renta" value="Renta">
+                        <label for="op-renta">Renta</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tipo de Propiedad -->
+            <div class="filter-group">
+                <label class="filter-label">Tipo de Propiedad</label>
+                <div class="checkbox-group" id="tipo-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tipo-casa" value="Casa">
+                        <label for="tipo-casa">Casa</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tipo-departamento" value="Departamento">
+                        <label for="tipo-departamento">Departamento</label>
+                </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tipo-terreno" value="Terreno">
+                        <label for="tipo-terreno">Terreno</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Ciudad -->
+            <div class="filter-group">
+                <label class="filter-label">Ciudad</label>
+                <div class="checkbox-group" id="ciudad-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-cuernavaca" value="Cuernavaca">
+                        <label for="ciudad-cuernavaca">Cuernavaca</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-temixco" value="Temixco">
+                        <label for="ciudad-temixco">Temixco</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-jiutepec" value="Jiutepec">
+                        <label for="ciudad-jiutepec">Jiutepec</label>
+                </div>
+                </div>
+            </div>
+            
+            <!-- Recámaras -->
+            <div class="filter-group">
+                <label class="filter-label">Recámaras</label>
+                <div class="checkbox-group" id="recamaras-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-1" value="1">
+                        <label for="rec-1">1 recámara</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-2" value="2">
+                        <label for="rec-2">2 recámaras</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-3" value="3">
+                        <label for="rec-3">3 recámaras</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-4" value="4+">
+                        <label for="rec-4">4+ recámaras</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Características -->
+            <div class="filter-group">
+                <label class="filter-label">Características</label>
+                <div class="checkbox-group" id="caracteristicas-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-piscina" value="piscina">
+                        <label for="carac-piscina">🏊 Piscina</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-jardin" value="jardin">
+                        <label for="carac-jardin">🌿 Jardín</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-cochera" value="cochera">
+                        <label for="carac-cochera">🚗 Cochera</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-terraza" value="terraza">
+                        <label for="carac-terraza">🏠 Terraza</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Seguridad -->
+            <div class="filter-group">
+                <label class="filter-label">Seguridad</label>
+                <div class="checkbox-group" id="seguridad-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-caseta" value="caseta">
+                        <label for="seg-caseta">🏛️ Caseta</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-camaras" value="camaras">
+                        <label for="seg-camaras">📹 Cámaras</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-24h" value="24h">
+                        <label for="seg-24h">🕐 24/7</label>
+                </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-controlado" value="acceso_controlado">
+                        <label for="seg-controlado">🚪 Acceso Controlado</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Niveles -->
+            <div class="filter-group">
+                <label class="filter-label">Niveles</label>
+                <div class="checkbox-group" id="niveles-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="niv-uno" value="un_nivel">
+                        <label for="niv-uno">🏠 Un Nivel</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="niv-dos" value="dos_niveles">
+                        <label for="niv-dos">🏢 Dos Niveles</label>
+                </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="niv-tres" value="tres_niveles">
+                        <label for="niv-tres">🏗️ Tres+ Niveles</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recámara Planta Baja -->
+            <div class="filter-group">
+                <label class="filter-label">Recámara en PB</label>
+                <div class="checkbox-group" id="recamara-pb-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-pb-si" value="si">
+                        <label for="rec-pb-si">✅ Sí</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-pb-no" value="no">
+                        <label for="rec-pb-no">❌ No</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Legal -->
+            <div class="filter-group">
+                <label class="filter-label">Documentación</label>
+                <div class="checkbox-group" id="legal-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="leg-escrituras" value="escrituras">
+                        <label for="leg-escrituras">📋 Escrituras</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="leg-cesion" value="cesion">
+                        <label for="leg-cesion">📝 Cesión</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="leg-credito" value="credito">
+                        <label for="leg-credito">💳 Acepta Crédito</label>
+                </div>
+                </div>
+            </div>
+            
+            <button class="clear-filters" onclick="clearAllFilters()">🗑️ Limpiar Filtros</button>
+        </aside>
+
+        <!-- ÁREA DE PROPIEDADES -->
+        <main class="properties-area">
+            <div class="properties-header">
+                <div class="properties-count" id="properties-count">
+                    Cargando propiedades...
+                </div>
+                <div class="sort-controls">
+                    <select class="sort-select" id="sort-select" onchange="sortProperties()">
+                        <option value="">Sin ordenar</option>
+                        <option value="precio_asc">Precio: Menor a Mayor</option>
+                        <option value="precio_desc">Precio: Mayor a Menor</option>
+                        <option value="fecha_desc">Más Recientes</option>
+                    </select>
+                    <div class="view-toggle">
+                        <button class="view-btn active" onclick="setGridView(3)">⊞ 3 Col</button>
+                        <button class="view-btn" onclick="setGridView(4)">⊞ 4 Col</button>
+                        <button class="view-btn" onclick="setGridView(1)">☰ Lista</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRID DE PROPIEDADES -->
+            <div class="properties-grid" id="properties-container">
+                <div class="loading">
+                    <p>Cargando propiedades...</p>
+                </div>
+            </div>
+            
+            <!-- PAGINACIÓN -->
+            <div class="pagination" id="pagination">
+                <!-- Se genera dinámicamente -->
+            </div>
+        </main>
+    </div>
+
+    <!-- MODALES -->
+    <!-- Modal de Login -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🔐 Iniciar Sesión</h2>
+                <button class="modal-close" onclick="closeModal('loginModal')">&times;</button>
+            </div>
+            <div id="loginContent">
+                <p>Cargando sistema de login...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Favoritos -->
+    <div class="modal" id="favoritesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">⭐ Mis Favoritos</h2>
+                <button class="modal-close" onclick="closeModal('favoritesModal')">&times;</button>
+            </div>
+            <div id="favoritesContent">
+                <p>No tienes favoritos guardados.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Leads -->
+    <div class="modal" id="leadsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🔥 Mis Leads</h2>
+                <button class="modal-close" onclick="closeModal('leadsModal')">&times;</button>
+            </div>
+            <div id="leadsContent">
+                <p>No tienes leads registrados.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="https://d2f1yntrge2rmq.cloudfront.net/sistema-login-google.js"></script>
+    
+    <script>
+        // CONFIGURACIÓN DE API
+        const API_BASE_URL = 'https://w9k13jp1xb.execute-api.us-east-1.amazonaws.com/dev';
+
+        // Variables globales
+        let allProperties = [];
+        let filteredProperties = [];
+        let currentPage = 1;
+        let currentLimit = 100; // CAMBIO: Iniciar con 100
+
+        // INICIALIZACIÓN
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFilters();
+            loadProperties();
+        });
+
+        // FUNCIÓN PARA DESCRIPCIÓN EXPANDIBLE
+        function toggleDescription(button) {
+            const container = button.parentElement;
+            const content = container.querySelector('.description-content');
+            const span = button.querySelector('span');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                button.classList.remove('expanded');
+                span.textContent = 'Ver descripción completa';
+            } else {
+                content.classList.add('show');
+                button.classList.add('expanded');
+                span.textContent = 'Ocultar descripción';
+            }
+        }
+
+        // INICIALIZAR FILTROS (SIN CHECKBOXES MARCADOS)
+        function initializeFilters() {
+            // Agregar event listeners a los filtros
+            document.getElementById('search-input').addEventListener('input', debounce(applyFilters, 300));
+            document.getElementById('price-min').addEventListener('input', debounce(applyFilters, 300));
+            document.getElementById('price-max').addEventListener('input', debounce(applyFilters, 300));
+            
+            // Event listeners para checkboxes
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', applyFilters);
+            });
+        }
+
+        // CARGAR PROPIEDADES - ✅ CORREGIDO PARA PAGINACIÓN FLEXIBLE
+        async function loadProperties(page = 1, limit = currentLimit) {
+            try {
+                showLoading();
+                
+                const response = await fetch(`${API_BASE_URL}/propiedades?limit=${limit}&page=${page}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('📊 Datos API recibidos:', data);
+                console.log(`🔄 Página ${page} - Propiedades recibidas: ${data.propiedades?.length || 0}`);
+                
+                if (page === 1) {
+                    allProperties = data.propiedades || [];
+                    filteredProperties = [...allProperties];
+                } else {
+                    allProperties = allProperties.concat(data.propiedades || []);
+                    filteredProperties = [...allProperties];
+                }
+                
+                console.log(`✅ Total propiedades cargadas: ${allProperties.length}`);
+                console.log(`✅ Total disponible según API: ${data.total || 0}`);
+                
+                renderProperties();
+                updatePropertiesCount(data.total || allProperties.length);
+                
+                // CARGAR TODAS LAS PÁGINAS DISPONIBLES según limite seleccionado
+                if (data.total > allProperties.length && page === 1 && limit !== data.total) {
+                    const totalPages = Math.ceil(data.total / limit);
+                    console.log(`🔄 Total páginas a cargar: ${totalPages}`);
+                    
+                    for (let i = 2; i <= totalPages; i++) {
+                        console.log(`🔄 Programando carga de página ${i}/${totalPages}`);
+                        setTimeout(() => loadProperties(i, limit), 500 * (i - 1));
+                    }
+                }
+                
+                if (page > 1) {
+                    const progress = Math.round((allProperties.length / (data.total || 1)) * 100);
+                    console.log(`📈 Progreso de carga: ${progress}% (${allProperties.length}/${data.total})`);
+                    updatePropertiesCount(allProperties.length);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error cargando propiedades:', error);
+                showError('Error al cargar propiedades: ' + error.message);
+            }
+        }
+
+        // CONSTRUIR FILTROS PARA API
+        function buildApiFilters() {
+            const filters = {};
+            
+            // Búsqueda
+            const search = document.getElementById('search-input').value.trim();
+            if (search) filters.search = search;
+            
+            // Precio
+            const priceMin = document.getElementById('price-min').value;
+            const priceMax = document.getElementById('price-max').value;
+            if (priceMin) filters.precio_min = priceMin;
+            if (priceMax) filters.precio_max = priceMax;
+            
+            // Operación
+            const operacion = getCheckedValues('#operacion-container input[type="checkbox"]');
+            if (operacion.length > 0) filters.tipo_operacion = operacion[0];
+            
+            // Tipo
+            const tipo = getCheckedValues('#tipo-container input[type="checkbox"]');
+            if (tipo.length > 0) filters.tipo_propiedad = tipo[0];
+            
+            // Ciudad
+            const ciudad = getCheckedValues('#ciudad-container input[type="checkbox"]');
+            if (ciudad.length > 0) filters.ciudad = ciudad[0];
+            
+            // Ordenamiento
+            const sort = document.getElementById('sort-select').value;
+            if (sort) filters.orden = sort;
+            
+            return filters;
+        }
+
+        // APLICAR FILTROS - ✅ OPTIMIZADO PARA 7,540 PROPIEDADES
+        function applyFilters() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+            const priceMin = parseFloat(document.getElementById('price-min').value) || 0;
+            const priceMax = parseFloat(document.getElementById('price-max').value) || Infinity;
+            
+            // Obtener filtros de checkboxes
+            const operacionFilters = Array.from(document.querySelectorAll('#operacion-container input:checked')).map(cb => cb.value);
+            const tipoFilters = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value);
+            const ciudadFilters = Array.from(document.querySelectorAll('#ciudad-container input:checked')).map(cb => cb.value);
+            const recamarasFilters = Array.from(document.querySelectorAll('#recamaras-container input:checked')).map(cb => cb.value);
+            const caracteristicasFilters = Array.from(document.querySelectorAll('#caracteristicas-container input:checked')).map(cb => cb.value);
+            const seguridadFilters = Array.from(document.querySelectorAll('#seguridad-container input:checked')).map(cb => cb.value);
+            const nivelesFilters = Array.from(document.querySelectorAll('#niveles-container input:checked')).map(cb => cb.value);
+            const recamaraPbFilters = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb => cb.value);
+            const legalFilters = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb => cb.value);
+            
+            console.log(`🔍 Aplicando filtros sobre ${allProperties.length} propiedades totales`);
+            console.log(`🎯 FILTROS ACTIVOS:`, {
+                operacion: operacionFilters,
+                tipo: tipoFilters,
+                ciudad: ciudadFilters,
+                precio_min: priceMin,
+                precio_max: priceMax,
+                busqueda: searchTerm
+            });
+            
+            filteredProperties = allProperties.filter(property => {
+                // Búsqueda global en múltiples campos
+                if (searchTerm) {
+                    const searchableContent = [
+                        property.id?.toString() || '',
+                        property.titulo || '',
+                        property.descripcion || '',
+                        property.ciudad || '',
+                        property.estado || '',
+                        property.colonia || '',
+                        property.direccion_completa || '',
+                        property.precio || '',
+                        property.precio_numerico?.toString() || ''
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableContent.includes(searchTerm)) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de precio
+                const propertyPrice = property.precio_numerico || 0;
+                if (propertyPrice < priceMin || propertyPrice > priceMax) {
+                    return false;
+                }
+                
+                // ✅ FILTRO TIPO OPERACIÓN - CRITERIOS CORRECTOS IMPLEMENTADOS
+                if (operacionFilters.length > 0) {
+                    // REGLAS DEFINITIVAS para determinar tipo de operación:
+                    // 1. Si precio contiene "/mes" → RENTA
+                    // 2. Si descripción contiene "renta" → RENTA  
+                    // 3. Si precio > $200,000 y NO hay evidencia de renta → VENTA
+                    // 4. Caso contrario: usar campo tipo_operacion original
+                    
+                    const precioTexto = (property.precio || '').toLowerCase();
+                    const descripcionTexto = (property.descripcion || '').toLowerCase();
+                    const precioNumerico = property.precio_numerico || 0;
+                    
+                    let tipoDetectado = '';
+                    
+                    // REGLA 1: Precio con "/mes" = RENTA
+                    if (precioTexto.includes('/mes') || precioTexto.includes('mes')) {
+                        tipoDetectado = 'renta';
+                    }
+                    // REGLA 2: Descripción contiene "renta" = RENTA
+                    else if (descripcionTexto.includes('renta') || descripcionTexto.includes('alquiler')) {
+                        tipoDetectado = 'renta';
+                    }
+                    // REGLA 3: Precio alto sin evidencia de renta = VENTA
+                    else if (precioNumerico > 200000 && 
+                             !precioTexto.includes('/mes') && 
+                             !precioTexto.includes('mes') &&
+                             !descripcionTexto.includes('renta') &&
+                             !descripcionTexto.includes('alquiler')) {
+                        tipoDetectado = 'venta';
+                    }
+                    // REGLA 4: Usar tipo_operacion original si existe
+                    else if (property.tipo_operacion && typeof property.tipo_operacion === 'string') {
+                        tipoDetectado = property.tipo_operacion.toLowerCase().trim();
+                    }
+                    // DEFAULT: Si no se puede determinar, excluir
+                    else {
+                        console.warn(`⚠️ Propiedad ${property.id} excluida: no se pudo determinar tipo operación`);
+                        return false;
+                    }
+                    
+                    // Verificar si coincide con filtros seleccionados
+                    const filtrosNormalizados = operacionFilters.map(f => f.toLowerCase().trim());
+                    const coincide = filtrosNormalizados.includes(tipoDetectado);
+                    
+                    // DEBUG DETALLADO para primeras 5 propiedades
+                    if (allProperties.indexOf(property) < 5) {
+                        console.log(`🔍 DETECCIÓN ${property.id}:`, {
+                            precio_texto: precioTexto,
+                            precio_numerico: precioNumerico,
+                            descripcion_contiene_renta: descripcionTexto.includes('renta'),
+                            tipo_detectado: tipoDetectado,
+                            filtros_activos: filtrosNormalizados,
+                            coincide: coincide
+                        });
+                    }
+                    
+                    if (!coincide) {
+                        return false;
+                    }
+                }
+                
+                if (tipoFilters.length > 0 && !tipoFilters.includes(property.tipo_propiedad)) {
+                    return false;
+                }
+                
+                if (ciudadFilters.length > 0 && !ciudadFilters.includes(property.ciudad)) {
+                    return false;
+                }
+                
+                if (recamarasFilters.length > 0) {
+                    const recamaras = property.recamaras || 0;
+                    const matchesRecamaras = recamarasFilters.some(filter => {
+                        if (filter === '4+') return recamaras >= 4;
+                        return recamaras === parseInt(filter);
+                    });
+                    if (!matchesRecamaras) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de características
+                if (caracteristicasFilters.length > 0) {
+                    const descripcion = (property.descripcion || '').toLowerCase();
+                    const amenidades = (property.amenidades || '').toLowerCase();
+                    const caracteristicas = (property.caracteristicas || '').toLowerCase();
+                    
+                    const matchesCaracteristicas = caracteristicasFilters.some(filter => {
+                        const filterLower = filter.toLowerCase();
+                        return descripcion.includes(filterLower) || 
+                               amenidades.includes(filterLower) || 
+                               caracteristicas.includes(filterLower);
+                    });
+                    
+                    if (!matchesCaracteristicas) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de seguridad
+                if (seguridadFilters.length > 0) {
+                    const descripcion = (property.descripcion || '').toLowerCase();
+                    const amenidades = (property.amenidades || '').toLowerCase();
+                    
+                    const matchesSeguridad = seguridadFilters.some(filter => {
+                        switch(filter) {
+                            case 'caseta': return descripcion.includes('caseta') || descripcion.includes('vigilancia');
+                            case 'camaras': return descripcion.includes('cámara') || descripcion.includes('camara') || amenidades.includes('cámara');
+                            case '24h': return descripcion.includes('24') || descripcion.includes('24/7');
+                            case 'acceso_controlado': return descripcion.includes('acceso controlado') || descripcion.includes('acceso');
+                            default: return false;
+                        }
+                    });
+                    
+                    if (!matchesSeguridad) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de niveles
+                if (nivelesFilters.length > 0) {
+                    const descripcion = (property.descripcion || '').toLowerCase();
+                    const niveles = property.niveles || 1;
+                    
+                    const matchesNiveles = nivelesFilters.some(filter => {
+                        switch(filter) {
+                            case 'un_nivel': return niveles === 1 || descripcion.includes('un nivel') || descripcion.includes('una planta');
+                            case 'dos_niveles': return niveles === 2 || descripcion.includes('dos nivel') || descripcion.includes('dos planta');
+                            case 'tres_niveles': return niveles >= 3 || descripcion.includes('tres nivel') || descripcion.includes('tres planta');
+                            default: return false;
+                        }
+                    });
+                    
+                    if (!matchesNiveles) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de recámara en planta baja
+                if (recamaraPbFilters.length > 0) {
+                    const descripcion = (property.descripcion || '').toLowerCase();
+                    const recamaraPb = property.recamara_planta_baja;
+                    
+                    const matchesRecamaraPb = recamaraPbFilters.some(filter => {
+                        switch(filter) {
+                            case 'si': return recamaraPb === true || descripcion.includes('planta baja');
+                            case 'no': return recamaraPb === false;
+                            default: return false;
+                        }
+                    });
+                    
+                    if (!matchesRecamaraPb) {
+                        return false;
+                    }
+                }
+                
+                // Filtro legal
+                if (legalFilters.length > 0) {
+                    const descripcion = (property.descripcion || '').toLowerCase();
+                    const legal = (property.legal || '').toLowerCase();
+                    
+                    const matchesLegal = legalFilters.some(filter => {
+                        switch(filter) {
+                            case 'escrituras': return legal.includes('escritura') || descripcion.includes('escritura');
+                            case 'cesion': return legal.includes('cesión') || descripcion.includes('cesión') || descripcion.includes('cesion');
+                            case 'credito': return descripcion.includes('crédito') || descripcion.includes('credito') || descripcion.includes('infonavit');
+                            default: return false;
+                        }
+                    });
+                    
+                    if (!matchesLegal) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+            
+            renderProperties();
+            updatePropertiesCount(filteredProperties.length);
+            console.log(`✅ Filtros aplicados: ${filteredProperties.length} de ${allProperties.length} propiedades`);
+        }
+
+        // OBTENER VALORES MARCADOS
+        function getCheckedValues(selector) {
+            const checkboxes = document.querySelectorAll(selector + ':checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        // LIMPIAR FILTROS
+        function clearAllFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('price-min').value = '';
+            document.getElementById('price-max').value = '';
+            document.getElementById('sort-select').value = '';
+            
+            // Limpiar todos los checkboxes de todos los filtros
+            const checkboxGroups = [
+                '#operacion-container input[type="checkbox"]',
+                '#tipo-container input[type="checkbox"]',
+                '#ciudad-container input[type="checkbox"]',
+                '#recamaras-container input[type="checkbox"]',
+                '#caracteristicas-container input[type="checkbox"]',
+                '#seguridad-container input[type="checkbox"]',
+                '#niveles-container input[type="checkbox"]',
+                '#recamara-pb-container input[type="checkbox"]',
+                '#legal-container input[type="checkbox"]'
+            ];
+            
+            checkboxGroups.forEach(selector => {
+                document.querySelectorAll(selector).forEach(cb => {
+                    cb.checked = false;
+                });
+            });
+            
+            applyFilters();
+        }
+
+        // RENDERIZAR PROPIEDADES - ✅ CORREGIDO DIRECCIONES Y PADDING
+        function renderProperties() {
+            const container = document.getElementById('properties-container');
+            if (!container) return;
+
+            if (filteredProperties.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                        <h3>No se encontraron propiedades</h3>
+                        <p>Intenta ajustar los filtros para ver más resultados</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const propertiesHTML = filteredProperties.map(property => {
+                // ✅ CORRECCIÓN USUARIO: Usar direccion_completa primero, fallback a ciudad/estado
+                const direccionReal = property.direccion_completa || 
+                                    property.direccion || 
+                                    `${property.ciudad || ''}, ${property.estado || ''}`.trim().replace(/^,|,$/, '') || 
+                                    'Ubicación no especificada';
+
+                // CORRECCIÓN: Arreglar URLs de imágenes duplicadas
+                let imagenURL = property.imagen_principal || property.imagenes?.[0] || '';
+                if (imagenURL.includes('/2025-') && imagenURL.match(/\/2025-\d{2}-\d{2}\/2025-\d{2}-\d{2}\//)) {
+                    // Remover duplicación de fecha
+                    imagenURL = imagenURL.replace(/\/2025-\d{2}-\d{2}\/2025-\d{2}-\d{2}\//, '/2025-06-27/');
+                }
+
+                return `
+                    <div class="property-card" onclick="openPropertyModal('${property.id}')">
+                        <div class="property-image">
+                            <img src="${imagenURL}" 
+                                 alt="${property.titulo}" 
+                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDMwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xNTAgMTAwTDEzMCA4MEgxNzBMMTUwIDEwMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPHRleHQgeD0iMTUwIiB5PSIxMjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzlDQTNBRiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+SW1hZ2VuIG5vIGRpc3BvbmlibGU8L3RleHQ+Cjwvc3ZnPg=='" 
+                                 loading="lazy">
+                            <div class="property-badge">${property.tipo_operacion}</div>
+                        </div>
+                        
+                        <div class="property-content">
+                            <div class="property-price">${property.precio || 'Precio no disponible'}</div>
+                            <h3 class="property-title">${property.titulo}</h3>
+                            <p class="property-location">📍 ${direccionReal}</p>
+                            
+                            <div class="property-details">
+                                <span><i class="🛏️"></i> ${property.recamaras || 0} rec</span>
+                                <span><i class="🚿"></i> ${property.banos || 0} baños</span>
+                                <span><i class="📐"></i> ${property.superficie_m2 || 0} m²</span>
+                            </div>
+                            
+                            <div class="property-meta">
+                                <span class="property-type">${property.tipo_propiedad}</span>
+                                <span class="property-id" style="font-size: 0.7rem; color: #9ca3af;">${property.id}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = propertiesHTML;
+        }
+        
+        // VER PROPIEDAD
+        function viewProperty(url) {
+            if (url && url !== 'undefined') {
+                window.open(url, '_blank');
+            } else {
+                alert('URL no disponible para esta propiedad');
+            }
+        }
+
+        // TOGGLE FAVORITO
+        function toggleFavorite(propertyId) {
+            // Aquí iría la lógica de favoritos
+            console.log('Toggle favorito para propiedad:', propertyId);
+        }
+
+        // CAMBIAR VISTA GRID
+        function setGridView(columns) {
+            const container = document.getElementById('properties-container');
+            const buttons = document.querySelectorAll('.view-btn');
+            
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Remover clases anteriores
+            container.classList.remove('list-view');
+            
+            if (columns === 1) {
+                // Vista lista con imagen lateral
+                container.classList.add('list-view');
+                container.style.gridTemplateColumns = '1fr';
+            } else if (columns === 3) {
+                container.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            } else if (columns === 4) {
+                container.style.gridTemplateColumns = 'repeat(4, 1fr)';
+            }
+        }
+
+        // ORDENAR PROPIEDADES
+        function sortProperties() {
+            applyFilters();
+        }
+
+        // RENDERIZAR PAGINACIÓN
+        function renderPagination(total, count, currentPage) {
+            const container = document.getElementById('pagination');
+            const totalPages = Math.ceil(total / 21);
+            
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Botón anterior
+            html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="loadProperties(${currentPage - 1})">‹ Anterior</button>`;
+            
+            // Páginas
+            for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+                const page = currentPage <= 3 ? i : currentPage - 3 + i;
+                if (page <= totalPages) {
+                    html += `<button class="${page === currentPage ? 'active' : ''}" onclick="loadProperties(${page})">${page}</button>`;
+                }
+            }
+            
+            // Botón siguiente
+            html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="loadProperties(${currentPage + 1})">Siguiente ›</button>`;
+            
+            container.innerHTML = html;
+        }
+
+        // ACTUALIZAR CONTADOR
+        function updatePropertiesCount(total) {
+            document.getElementById('properties-count').textContent = `${total} propiedades encontradas`;
+        }
+
+        // MOSTRAR LOADING
+        function showLoading() {
+            document.getElementById('properties-container').innerHTML = `
+                <div class="loading">
+                    <p>Cargando propiedades...</p>
+                </div>
+            `;
+        }
+
+        // MOSTRAR ERROR
+        function showError(message) {
+            document.getElementById('properties-container').innerHTML = `
+                <div class="no-results">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // UTILIDADES
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // FUNCIONES DE MODAL
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        function showFavorites() {
+            document.getElementById('favoritesModal').classList.add('show');
+        }
+
+        function showLeads() {
+            document.getElementById('leadsModal').classList.add('show');
+        }
+
+        function showRavelLeads() {
+            alert('Función Ravel Leads en desarrollo');
+        }
+
+        function showAdminModal() {
+            alert('Panel de administración en desarrollo');
+        }
+
+        function logout() {
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('userData');
+            document.getElementById('userInfo').classList.remove('show');
+            alert('Sesión cerrada correctamente');
+        }
+
+        // Click fuera del modal para cerrar
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('show');
+            }
+        }
+
+        // FUNCIÓN PARA CAMBIAR LÍMITE DE CARGA
+        function changePaginationLimit(newLimit) {
+            currentLimit = newLimit;
+            allProperties = [];
+            filteredProperties = [];
+            currentPage = 1;
+            
+            console.log(`📄 Cambiando paginación a: ${newLimit === 7540 ? 'TODAS' : newLimit} propiedades`);
+            
+            if (newLimit === 7540) {
+                // Cargar todas de una vez
+                loadProperties(1, 7540);
+            } else {
+                // Cargar con paginación normal
+                loadProperties(1, newLimit);
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,28 @@
+{
+  "timestamp": "2025-07-03T07:54:18.137235",
+  "proyecto": "todaslascasas.mx",
+  "archivos_esenciales": 13,
+  "configuracion_requerida": {
+    "postgresql": {
+      "host": "[DOCUMENTAR_TU_HOST]",
+      "database": "[DOCUMENTAR_TU_DB]",
+      "user": "[DOCUMENTAR_TU_USER]",
+      "password": "[GUARDAR_EN_.env]"
+    },
+    "aws_lambda": {
+      "function_name": "[DOCUMENTAR_NOMBRE_FUNCION]",
+      "api_gateway": "[DOCUMENTAR_URL_API]",
+      "region": "us-east-1"
+    },
+    "aws_s3": {
+      "bucket": "todaslascasas-imagenes",
+      "region": "us-east-1",
+      "public_policy": "[DOCUMENTAR_POLITICA]"
+    }
+  },
+  "urls_importantes": {
+    "sitio_web": "https://todaslascasas.mx",
+    "api_lambda": "[DOCUMENTAR_URL_LAMBDA]",
+    "imagenes_s3": "https://todaslascasas-imagenes.s3.amazonaws.com"
+  }
+}

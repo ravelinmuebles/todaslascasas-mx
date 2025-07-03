@@ -1,0 +1,48 @@
+# 🔐 CREDENCIALES SENSIBLES - NUNCA SUBIR
+.env
+*.env
+config/database.json
+config/aws-credentials.json
+config/secrets.json
+*.pem
+*.key
+*.p12
+
+# 📊 ARCHIVOS TEMPORALES
+*.log
+*.bak
+*.backup*
+*_backup_*
+# Permitir archivo principal pero bloquear otros temp
+temp_*
+!temp_s3_index_actual.html
+logs/
+resultados/
+debug.log
+parser.log
+
+# 🗂️ CARPETAS GRANDES/OBSOLETAS  
+ARCHIVOS_NO_PROYECTO/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+
+# 💾 ARCHIVOS DEL SISTEMA
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 📦 ARCHIVOS DE DISTRIBUCIÓN
+*.zip
+*.tar.gz
+dist/
+build/
+
+# 🧪 ARCHIVOS DE PRUEBA
+test_results/
+coverage/
+*.coverage
