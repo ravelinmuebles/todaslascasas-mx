@@ -359,7 +359,9 @@ async def listar_propiedades(
     documentacion: Optional[List[str]] = Query(None, description="Filtrar por documentación"),
     caracteristicas_adicionales: Optional[List[str]] = Query(None, description="Filtrar por características adicionales"),
     q: Optional[str] = Query(None, description="Búsqueda de texto"),
-    orden: Optional[str] = Query("created_at", description="Campo para ordenar")
+    orden: Optional[str] = Query("created_at", description="Campo para ordenar"),
+    niveles: Optional[List[int]] = Query(None, description="Número de niveles"),
+    recamara_planta_baja: Optional[bool] = Query(None, description="Filtrar por recámara en planta baja"),
 ):
     """
     Lista propiedades con paginación y filtros FUNCIONALES
@@ -532,6 +534,23 @@ async def listar_propiedades(
                 caracteristicas_adicionales_conditions.append("(LOWER(titulo) LIKE '%%área de servicio%%' OR LOWER(descripcion) LIKE '%%área de servicio%%')")
         if caracteristicas_adicionales_conditions:
             where_conditions.append(f"({' OR '.join(caracteristicas_adicionales_conditions)})")
+    
+    # FILTRO DE NIVELES
+    if niveles and len(niveles) > 0:
+        niv_conditions = []
+        for niv in niveles:
+            if niv >= 3:
+                niv_conditions.append("niveles >= %s")
+                params.append(3)
+            else:
+                niv_conditions.append("niveles = %s")
+                params.append(niv)
+        if niv_conditions:
+            where_conditions.append(f"({' OR '.join(niv_conditions)})")
+
+    # Recámara en planta baja
+    if recamara_planta_baja:
+        where_conditions.append("recamara_planta_baja = true")
     
     where_clause = " AND ".join(where_conditions)
     

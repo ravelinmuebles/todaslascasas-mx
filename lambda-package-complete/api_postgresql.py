@@ -360,6 +360,8 @@ async def listar_propiedades(
     estacionamientos: Optional[List[int]] = Query(None, description="Números de estacionamientos"),
     superficie_min: Optional[int] = Query(None, description="Superficie mínima en m²"),
     superficie_max: Optional[int] = Query(None, description="Superficie máxima en m²"),
+    niveles: Optional[List[int]] = Query(None, description="Número de niveles"),
+    recamara_planta_baja: Optional[bool] = Query(None, description="Filtrar por recámara en planta baja"),
     # Filtros de seguridad (booleanos)
     caseta_vigilancia: Optional[bool] = Query(None, description="Filtrar por caseta de vigilancia"),
     camaras_seguridad: Optional[bool] = Query(None, description="Filtrar por cámaras de seguridad"),
@@ -489,6 +491,23 @@ async def listar_propiedades(
                 params.append(est)
         if est_conditions:
             where_conditions.append(f"({' OR '.join(est_conditions)})")
+
+    # FILTRO DE NIVELES
+    if niveles and len(niveles) > 0:
+        niv_conditions = []
+        for niv in niveles:
+            if niv >= 3:
+                niv_conditions.append("niveles >= %s")
+                params.append(3)
+            else:
+                niv_conditions.append("niveles = %s")
+                params.append(niv)
+        if niv_conditions:
+            where_conditions.append(f"({' OR '.join(niv_conditions)})")
+
+    # Recámara en planta baja
+    if recamara_planta_baja:
+        where_conditions.append("recamara_planta_baja = true")
     
     # FILTROS DE SEGURIDAD (columnas booleanas)
     if caseta_vigilancia:
