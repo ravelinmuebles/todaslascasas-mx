@@ -184,3 +184,4 @@ refactor: cambio interno sin alterar funcionalidad
 9. **Limpieza** – código vivo solo en carpetas principales.
 10. **Comunicación** – explica pasos y cita líneas.
 11. **Automatización** – la IA ejecuta Git, PR, auto-merge y despliegues. 
+12. **Progreso visible** – En tareas largas (scraping masivo, empaquetado Lambda, tests extensos) la IA presentará una barra/indicador de progreso en las salidas de terminal o mensajes, para que puedas monitorear el avance hasta que el sitio esté 100 % funcional. 
