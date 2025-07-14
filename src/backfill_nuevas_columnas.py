@@ -108,12 +108,12 @@ def main():
 
     cur.execute(
         f"""
-        SELECT id, titulo, descripcion, niveles, recamara_pb, caseta_vigilancia,
+        SELECT id, titulo, descripcion, niveles, recamara_planta_baja, caseta_vigilancia,
                camaras_seguridad, vigilancia_24h, acceso_controlado
         FROM propiedades
         WHERE (
             niveles IS NULL
-            OR recamara_pb IS NULL
+            OR recamara_planta_baja IS NULL
             OR caseta_vigilancia IS NULL
             OR camaras_seguridad IS NULL
             OR vigilancia_24h IS NULL
@@ -142,7 +142,7 @@ def main():
     update_sql = (
         "UPDATE propiedades SET "
         "niveles = COALESCE(%s, niveles), "
-        "recamara_pb = COALESCE(%s, recamara_pb), "
+        "recamara_planta_baja = COALESCE(%s, recamara_planta_baja), "
         "caseta_vigilancia = COALESCE(%s, caseta_vigilancia), "
         "camaras_seguridad = COALESCE(%s, camaras_seguridad), "
         "vigilancia_24h = COALESCE(%s, vigilancia_24h), "
