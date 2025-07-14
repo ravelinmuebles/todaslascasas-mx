@@ -1188,7 +1188,7 @@
                 showLoading();
                 
                 // Construir query-string incluyendo filtros
-                const paramsObj = { ...filters, limit, page };
+                const paramsObj = { ...filters, por_pagina: limit, pagina: page };
                 const qs = new URLSearchParams(paramsObj).toString();
                 const url = `${API_BASE_URL}/propiedades?${qs}`;
                 console.log('🌐 Fetch:', url);
@@ -1307,8 +1307,13 @@
             // ciudadFilters ya calculado más arriba, evitar redeclarar
             const ciudadFilters = Array.from(document.querySelectorAll('#ciudad-container input:checked')).map(cb => cb.value.toLowerCase());
 
-            const needsLocalTipo = (tipoFilters.includes('local') || tipoFilters.includes('oficina'));
-            const needsLocal = advSeguridad.length > 0 || advNiveles.length > 0 || advRecPb.length > 0 || advLegal.length > 0 || priceMinVal > 0 || priceMaxVal < Infinity || needsLocalTipo;
+            // Obtener tipos seleccionados ANTES de usarlos en needsLocalTipo
+            const tipoFiltersEarly = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
+
+            const needsLocalTipo = (tipoFiltersEarly.includes('local') || tipoFiltersEarly.includes('oficina'));
+            // Desde que el backend maneja precio y seguridad, sólo requerimos dataset completo cuando
+            // el tipo de propiedad es "local" u "oficina" (el backend aún no los devuelve).
+            const needsLocal = needsLocalTipo;
 
             // Si estamos usando paginación parcial y el usuario selecciona filtros que sólo funcionan localmente,
             // cambiamos automáticamente el límite a 6160 (todas las propiedades) y reintentar después de la carga.
@@ -2036,7 +2041,7 @@
                 let totalExpected = 0;
                 while (true) {
                     console.log(`🌐 Solicitud API – página ${page}, batch ${batchSize}`);
-                    const resp = await fetch(`${API_BASE_URL}/propiedades?limit=${batchSize}&page=${page}`);
+                    const resp = await fetch(`${API_BASE_URL}/propiedades?por_pagina=${batchSize}&pagina=${page}`);
                     if (!resp.ok) {
                         throw new Error(`HTTP ${resp.status}`);
                     }
