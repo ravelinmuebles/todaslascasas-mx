@@ -3,6 +3,7 @@ import pytest
 from playwright.sync_api import sync_playwright, expect
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000/index.html")
+HEADLESS_ENV = os.getenv("HEADLESS", "false").lower() in ("1", "true", "yes")
 
 # (selector, checkbox_value)
 FILTROS = [
@@ -27,7 +28,7 @@ FILTROS = [
 def test_filtros_renderizan_tarjetas(selector: str, nombre: str):
     """Valida que al activar el filtro aparezca ≥1 tarjeta y la consola esté limpia."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=HEADLESS_ENV)
         page = browser.new_page()
         console_errors = []
         page.on("console", lambda msg: console_errors.append(msg) if msg.type == "error" else None)
