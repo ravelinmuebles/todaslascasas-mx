@@ -354,6 +354,11 @@ async def listar_propiedades(
     estacionamientos: Optional[List[int]] = Query(None, description="Números de estacionamientos"),
     superficie_min: Optional[int] = Query(None, description="Superficie mínima en m²"),
     superficie_max: Optional[int] = Query(None, description="Superficie máxima en m²"),
+    # Filtros de seguridad (booleanos)
+    caseta_vigilancia: Optional[bool] = Query(None, description="Filtrar por caseta de vigilancia"),
+    camaras_seguridad: Optional[bool] = Query(None, description="Filtrar por cámaras de seguridad"),
+    vigilancia_24h: Optional[bool] = Query(None, description="Filtrar por vigilancia 24 horas"),
+    acceso_controlado: Optional[bool] = Query(None, description="Filtrar por acceso controlado"),
     amenidad: Optional[List[str]] = Query(None, description="Filtrar por amenidades"),
     documentacion: Optional[List[str]] = Query(None, description="Filtrar por documentación"),
     caracteristicas_adicionales: Optional[List[str]] = Query(None, description="Filtrar por características adicionales"),
@@ -416,8 +421,14 @@ async def listar_propiedades(
     if tipo_propiedad and len(tipo_propiedad) > 0:
         tp_conditions = []
         for tp in tipo_propiedad:
-            tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
-            params.append(tp)
+            tp_low = tp.lower()
+            if tp_low in ["local", "oficina"]:
+                # permitir variantes "local comercial", "oficina"
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append(f"%{tp_low}%")
+            else:
+                tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
+                params.append(tp)
         where_conditions.append(f"({' OR '.join(tp_conditions)})")
     
     # FILTROS DE PRECIO
@@ -469,6 +480,16 @@ async def listar_propiedades(
                 params.append(est)
         if est_conditions:
             where_conditions.append(f"({' OR '.join(est_conditions)})")
+    
+    # FILTROS DE SEGURIDAD (columnas booleanas)
+    if caseta_vigilancia:
+        where_conditions.append("caseta_vigilancia = true")
+    if camaras_seguridad:
+        where_conditions.append("camaras_seguridad = true")
+    if vigilancia_24h:
+        where_conditions.append("vigilancia_24h = true")
+    if acceso_controlado:
+        where_conditions.append("acceso_controlado = true")
     
     if superficie_min is not None:
         where_conditions.append("superficie_construida >= %s")
