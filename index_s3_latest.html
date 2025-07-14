@@ -1311,7 +1311,9 @@
             const tipoFiltersEarly = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
 
             const needsLocalTipo = (tipoFiltersEarly.includes('local') || tipoFiltersEarly.includes('oficina'));
-            const needsLocal = advSeguridad.length > 0 || advNiveles.length > 0 || advRecPb.length > 0 || advLegal.length > 0 || priceMinVal > 0 || priceMaxVal < Infinity || needsLocalTipo;
+            // Desde que el backend maneja precio y seguridad, sólo requerimos dataset completo cuando
+            // el tipo de propiedad es "local" u "oficina" (el backend aún no los devuelve).
+            const needsLocal = needsLocalTipo;
 
             // Si estamos usando paginación parcial y el usuario selecciona filtros que sólo funcionan localmente,
             // cambiamos automáticamente el límite a 6160 (todas las propiedades) y reintentar después de la carga.
