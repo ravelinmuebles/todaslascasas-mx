@@ -1,0 +1,364 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditoría Completa - Sistema de Clasificación</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .header { background: #2c3e50; color: white; padding: 20px; text-align: center; border-radius: 8px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .critical { border-left: 5px solid #e74c3c; background: #fdf2f2; }
+        .warning { border-left: 5px solid #f39c12; background: #fef9e7; }
+        .info { border-left: 5px solid #3498db; background: #eaf4fd; }
+        .success { border-left: 5px solid #27ae60; background: #eafaf1; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+        .stat { display: inline-block; margin: 10px; padding: 15px; background: #f8f9fa; border-radius: 5px; }
+        .problema { margin: 10px 0; padding: 10px; background: #fff; border-left: 3px solid #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 AUDITORÍA COMPLETA DEL SISTEMA</h1>
+        <p>Sistema de Clasificación de Propiedades Facebook Scraper</p>
+        <p>Total de propiedades analizadas: 4270</p>
+    </div>
+
+    <div class="section info">
+        <h2>📊 Resumen Ejecutivo</h2>
+        <div class="stat">
+            <strong>Ventas:</strong> 2239 
+            (52.4%)
+        </div>
+        <div class="stat">
+            <strong>Rentas:</strong> 2013 
+            (47.1%)
+        </div>
+        <div class="stat">
+            <strong>Desconocido:</strong> 18 
+            (0.4%)
+        </div>
+    </div>
+
+    <div class="section critical">
+        <h2>🚨 Casos Críticos (20 encontrados)</h2>
+        <p>Estos casos requieren revisión manual inmediata:</p>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1001784718600721<br>
+            <strong>Precio:</strong> $1<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Venta con precio muy bajo: $1<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. 🏡 ¡EXCLUSIVA RESIDENCIA EN VENTA EN PEDREGAL DE LAS FUENTES, JIUTEPEC, MOR! 🏡
+
+📍Ubicación: Pedregal de las Fuentes, Jiutepec, Morelos
+...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1005078538247666<br>
+            <strong>Precio:</strong> $255<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Venta con precio muy bajo: $255<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. Venta de adoquín por metro cuadrado diferentes modelos y colores
+Nos ubicamos en avenida ferrocarril #303colonia nogales ocotepec Cuer...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1005179491211031<br>
+            <strong>Precio:</strong> $700,000<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Clasificado como venta pero descripción sugiere renta<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. 🔥 ¡ATENCIÓN! Increíbles Lotes en Venta, Desarollo de Lujo Nuevo, Cuernavaca Morelos.
+
+🏡 Excelentes Lotes en Venta 
+
+📍 Ubicados en Cuer...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1010679347359658<br>
+            <strong>Precio:</strong> $4,750,000<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Clasificado como venta pero descripción sugiere renta<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. 🔴🔴LOMAS DE CORTES RESIDENCIAL EN FRACCIONAMIENTO CERRADO ESTRENE HERMOSA CASA EN VENTA CON ACABADOS DE LUJO SEA DE LOS PRIMEROS EN VIS...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1018486910428862<br>
+            <strong>Precio:</strong> $1,800<br>
+            <strong>Tipo:</strong> renta<br>
+            <strong>Razón:</strong> Clasificado como renta pero descripción sugiere venta<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. Atención inversionistas 
+Se Vende Casa 
+Ideal para renta de cuartos 
+Zona de oficinas y universidad 
+A una cuadra de transporte públic...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1021833459885032<br>
+            <strong>Precio:</strong> $11,500<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Venta con precio muy bajo: $11,500<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. 💥EN VENTA: Casa un nivel recién remodelada en Delicias Cuernavaca
+
+🔹987m2 terreno | 505m2 const.
+🔹Diseño moderno y funcional 
+🔹6 recs ...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1022465499362118<br>
+            <strong>Precio:</strong> $2,100<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Venta con precio muy bajo: $2,100<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. VENDO TERRENO 
+✨✨✨TEMIXCO ✨✨✨
+CERCA DELA UVM Y WALMART PARAISO 
+920 MTS
+💲2,100 X MT
+43 MT  FONDO 
+23 MTS FRENTE 
+✔️TITULO DE PROPIEDAD...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1035679131470317<br>
+            <strong>Precio:</strong> $6,200,000<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Clasificado como venta pero descripción sugiere renta<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. 🏡 Venta 📌 Buena vista Cuernavaca, Mor. 💲6,200,000.00
+📐 Construcción: 222.00 m²
+🌍 Terreno: 160 m² + Área Federal: 65.57 m² (Total: 226....
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1038408577666262<br>
+            <strong>Precio:</strong> $180<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Venta con precio muy bajo: $180<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. venta de 800 MTRS de terreno ideal para construir tu casa ideal muy bonita vista  todo o en lotes  son ejidales papales en regla solo ...
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1039363068146431<br>
+            <strong>Precio:</strong> $1,200,000<br>
+            <strong>Tipo:</strong> venta<br>
+            <strong>Razón:</strong> Clasificado como venta pero descripción sugiere renta<br>
+            <strong>Título:</strong> Notificaciones<br>
+            <strong>Descripción:</strong> Notificaciones. Casa en Venta en Tezoyuca, Emiliano Zapata | 2 Recámaras + Posible Recámara en PB | Alberca | Áreas Verdes y Palapa | Doble Seguridad ...
+        </div>
+        
+    </div>
+
+    <div class="section warning">
+        <h2>⚠️ Problemas de Precios (10 encontrados)</h2>
+        <p>Inconsistencias entre precios y tipo de operación:</p>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1001784718600721<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $1<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1005078538247666<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $255<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1021833459885032<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $11,500<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1022465499362118<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $2,100<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1038408577666262<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $180<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1044976304251802<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $2,500<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1130338365531607<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $42,000<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1138883324278817<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $200<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1194856098593172<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $24<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1201334695039858<br>
+            <strong>Tipo Problema:</strong> venta_precio_bajo<br>
+            <strong>Precio:</strong> $6,500<br>
+            <strong>Título:</strong> Notificaciones<br>
+        </div>
+        
+    </div>
+
+    <div class="section warning">
+        <h2>🔄 Clasificaciones Incorrectas (15 encontrados)</h2>
+        <p>Propiedades que podrían estar mal clasificadas según su descripción:</p>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1018486910428862<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> se\s+vende<br>
+            <strong>Precio:</strong> $1,800<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1198541888430319<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> oportunidad<br>
+            <strong>Precio:</strong> $14<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1234679515045312<br>
+            <strong>Error:</strong> deberia_ser_renta<br>
+            <strong>Patrón:</strong> se\s+renta<br>
+            <strong>Precio:</strong> $3,100,000<br>
+            <strong>Actual:</strong> venta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1331607028148817<br>
+            <strong>Error:</strong> deberia_ser_renta<br>
+            <strong>Patrón:</strong> se\s+renta<br>
+            <strong>Precio:</strong> $3,500,000<br>
+            <strong>Actual:</strong> venta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1364751494749632<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> precio\s+total<br>
+            <strong>Precio:</strong> $5<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1368914494402813<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> oportunidad<br>
+            <strong>Precio:</strong> $3,000<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1380408196334599<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> crédito<br>
+            <strong>Precio:</strong> $2,150<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1396299191616019<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> crédito<br>
+            <strong>Precio:</strong> $11<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 1406421507222632<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> crédito<br>
+            <strong>Precio:</strong> $600<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+        <div class="problema">
+            <strong>ID:</strong> 2093838611027706<br>
+            <strong>Error:</strong> deberia_ser_venta<br>
+            <strong>Patrón:</strong> crédito<br>
+            <strong>Precio:</strong> $650<br>
+            <strong>Actual:</strong> renta<br>
+        </div>
+        
+    </div>
+
+    <div class="section info">
+        <h2>📈 Estadísticas de Precios</h2>
+        <h3>Ventas</h3>
+        <div class="stat">Promedio: $3,070,219</div>
+        <div class="stat">Mediana: $2,165,000</div>
+        <div class="stat">Mínimo: $1</div>
+        <div class="stat">Máximo: $42,000,000</div>
+        
+        <h3>Rentas</h3>
+        <div class="stat">Promedio: $28,392</div>
+        <div class="stat">Mediana: $10,000</div>
+        <div class="stat">Mínimo: $1</div>
+        <div class="stat">Máximo: $4,500,000</div>
+    </div>
+
+    <div class="section info">
+        <h2>📊 Calidad de Datos</h2>
+        <div class="stat">Precios en cero: 0 (0.0%)</div>
+        <div class="stat">Sin descripción: 0 (0.0%)</div>
+        <div class="stat">Sin ubicación: 0 (0.0%)</div>
+        <div class="stat">Descripciones cortas: 31 (0.7%)</div>
+    </div>
+
+    <div class="section success">
+        <h2>💡 Recomendaciones de Mejora</h2>
+        <ul>
+            <li><strong>Revisar casos críticos:</strong> 20 propiedades necesitan revisión manual</li>
+            <li><strong>Mejorar lógica de precios:</strong> Ajustar umbrales para rentas > $80K y ventas < $100K</li>
+            <li><strong>Refinar patrones de texto:</strong> 15 casos sugieren mejoras en el análisis semántico</li>
+            <li><strong>Completar datos faltantes:</strong> 0 propiedades con datos incompletos</li>
+            <li><strong>Implementar validación cruzada:</strong> Verificar coherencia entre precio, descripción y clasificación</li>
+        </ul>
+    </div>
+</body>
+</html>
+        

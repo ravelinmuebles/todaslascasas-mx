@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Propiedades - 50K Inmuebles</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        /* Header */
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            background: rgba(255,255,255,0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        /* Layout principal */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+            min-height: calc(100vh - 120px);
+        }
+
+        /* Panel de filtros */
+        .filters-panel {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            height: fit-content;
+            position: sticky;
+            top: 2rem;
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+        }
+
+        .filter-group select,
+        .filter-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .price-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        /* Área de contenido */
+        .content-area {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .results-info {
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Grid de propiedades */
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .property-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            background: white;
+        }
+
+        .property-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .property-image {
+            width: 100%;
+            height: 200px;
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .property-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+
+        .property-card:hover .property-image img {
+            transform: scale(1.05);
+        }
+
+        .image-placeholder {
+            color: var(--secondary);
+            font-size: 3rem;
+        }
+
+        .property-info {
+            padding: 1.25rem;
+        }
+
+        .property-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+            color: var(--dark);
+        }
+
+        .property-location {
+            color: var(--secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .property-price {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--success);
+            margin-bottom: 1rem;
+        }
+
+        .property-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            text-align: center;
+        }
+
+        .detail-item {
+            background: var(--light);
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            display: block;
+        }
+
+        .detail-label {
+            color: var(--secondary);
+            font-size: 0.75rem;
+        }
+
+        /* Paginación */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--dark);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .current-page {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+            color: var(--secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .filters-panel {
+                position: static;
+            }
+
+            .properties-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .properties-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .content-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .header-stats {
+                justify-content: center;
+            }
+        }
+
+        /* Modo oscuro */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --light: #0f172a;
+                --dark: #f8fafc;
+                --border: #334155;
+            }
+
+            body {
+                background: var(--light);
+                color: var(--dark);
+            }
+
+            .filters-panel,
+            .content-area,
+            .property-card {
+                background: #1e293b;
+                border-color: var(--border);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1>🏠 Catálogo de Propiedades</h1>
+            <p>Encuentra tu hogar ideal entre miles de opciones</p>
+            <div class="header-stats" id="headerStats">
+                <div class="stat">📊 Cargando estadísticas...</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="main-layout">
+            <!-- Panel de filtros -->
+            <aside class="filters-panel">
+                <h3>🔍 Filtros</h3>
+                
+                <div class="filter-group">
+                    <label for="ciudad">Ciudad</label>
+                    <select id="ciudad">
+                        <option value="">Todas las ciudades</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="tipoPropiedad">Tipo de Propiedad</label>
+                    <select id="tipoPropiedad">
+                        <option value="">Todos los tipos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="tipoOperacion">Operación</label>
+                    <select id="tipoOperacion">
+                        <option value="">Venta y Renta</option>
+                        <option value="Venta">Venta</option>
+                        <option value="Renta">Renta</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Rango de Precio</label>
+                    <div class="price-range">
+                        <input type="number" id="precioMin" placeholder="Mínimo">
+                        <input type="number" id="precioMax" placeholder="Máximo">
+                    </div>
+                </div>
+
+                <button class="btn" onclick="aplicarFiltros()">Aplicar Filtros</button>
+                <button class="btn btn-secondary" onclick="limpiarFiltros()">Limpiar</button>
+            </aside>
+
+            <!-- Área de contenido -->
+            <main class="content-area">
+                <div class="content-header">
+                    <div class="search-box">
+                        <input type="text" id="busqueda" placeholder="Buscar propiedades...">
+                    </div>
+                    <div class="results-info" id="resultsInfo">
+                        Preparando catálogo...
+                    </div>
+                </div>
+
+                <div id="loadingIndicator" class="loading">
+                    <div class="spinner"></div>
+                    Cargando propiedades...
+                </div>
+
+                <div class="properties-grid" id="propertiesGrid" style="display: none;">
+                    <!-- Las propiedades se cargarán aquí -->
+                </div>
+
+                <div class="pagination" id="pagination" style="display: none;">
+                    <!-- Los controles de paginación se cargarán aquí -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        const API_BASE = '/api';
+        let currentPage = 1;
+        let currentFilters = {};
+        let totalPages = 1;
+        let isLoading = false;
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', async () => {
+            await cargarEstadisticas();
+            await cargarFiltros();
+            await cargarPropiedades();
+            
+            // Event listeners
+            document.getElementById('busqueda').addEventListener('input', debounce(buscarPropiedades, 500));
+        });
+
+        // Función debounce para búsqueda
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Cargar estadísticas
+        async function cargarEstadisticas() {
+            try {
+                const response = await fetch(`${API_BASE}/estadisticas`);
+                const stats = await response.json();
+                
+                const statsHtml = `
+                    <div class="stat">📊 ${stats.total_propiedades.toLocaleString()} propiedades</div>
+                    <div class="stat">🏙️ ${Object.keys(stats.por_ciudad).length} ciudades</div>
+                    <div class="stat">🏠 ${Object.keys(stats.por_tipo).length} tipos</div>
+                `;
+                
+                document.getElementById('headerStats').innerHTML = statsHtml;
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+            }
+        }
+
+        // Cargar opciones de filtros
+        async function cargarFiltros() {
+            try {
+                const response = await fetch(`${API_BASE}/estadisticas`);
+                const stats = await response.json();
+                
+                // Poblar ciudades
+                const ciudadSelect = document.getElementById('ciudad');
+                Object.keys(stats.por_ciudad)
+                    .sort()
+                    .forEach(ciudad => {
+                        if (ciudad !== 'Sin ciudad') {
+                            const option = document.createElement('option');
+                            option.value = ciudad;
+                            option.textContent = `${ciudad} (${stats.por_ciudad[ciudad]})`;
+                            ciudadSelect.appendChild(option);
+                        }
+                    });
+
+                // Poblar tipos de propiedad
+                const tipoSelect = document.getElementById('tipoPropiedad');
+                Object.keys(stats.por_tipo)
+                    .sort()
+                    .forEach(tipo => {
+                        if (tipo !== 'Sin tipo') {
+                            const option = document.createElement('option');
+                            option.value = tipo;
+                            option.textContent = `${tipo} (${stats.por_tipo[tipo]})`;
+                            tipoSelect.appendChild(option);
+                        }
+                    });
+
+            } catch (error) {
+                console.error('Error cargando filtros:', error);
+            }
+        }
+
+        // Cargar propiedades
+        async function cargarPropiedades(page = 1) {
+            if (isLoading) return;
+            
+            isLoading = true;
+            mostrarLoading(true);
+            
+            try {
+                const params = new URLSearchParams({
+                    pagina: page,
+                    por_pagina: 20,
+                    ...currentFilters
+                });
+
+                const response = await fetch(`${API_BASE}/propiedades?${params}`);
+                const data = await response.json();
+                
+                currentPage = data.pagina;
+                totalPages = data.total_paginas;
+                
+                mostrarPropiedades(data.propiedades);
+                mostrarPaginacion(data);
+                actualizarInfoResultados(data);
+                
+            } catch (error) {
+                console.error('Error cargando propiedades:', error);
+                mostrarError('Error cargando propiedades');
+            } finally {
+                isLoading = false;
+                mostrarLoading(false);
+            }
+        }
+
+        // Mostrar propiedades en el grid
+        function mostrarPropiedades(propiedades) {
+            const grid = document.getElementById('propertiesGrid');
+            
+            if (propiedades.length === 0) {
+                grid.innerHTML = '<div class="loading">No se encontraron propiedades</div>';
+                grid.style.display = 'block';
+                return;
+            }
+
+            const html = propiedades.map(prop => crearTarjetaPropiedad(prop)).join('');
+            grid.innerHTML = html;
+            grid.style.display = 'grid';
+        }
+
+        // Crear tarjeta de propiedad
+        function crearTarjetaPropiedad(prop) {
+            const precio = prop.precio?.formato || prop.precio?.texto || 'Precio no disponible';
+            const imagen = prop.imagen_portada?.ruta_relativa;
+            const caracteristicas = prop.caracteristicas || {};
+
+            return `
+                <article class="property-card" onclick="verDetalle('${prop.id}')">
+                    <div class="property-image">
+                        ${imagen ? 
+                            `<img src="resultados/${imagen}" alt="${prop.titulo}" loading="lazy" onerror="this.style.display='none'">` :
+                            '<div class="image-placeholder">🏠</div>'
+                        }
+                    </div>
+                    <div class="property-info">
+                        <h3 class="property-title">${prop.titulo || 'Sin título'}</h3>
+                        <div class="property-location">
+                            📍 ${prop.ciudad || 'Sin ubicación'}${prop.colonia ? `, ${prop.colonia}` : ''}
+                        </div>
+                        <div class="property-price">${precio}</div>
+                        <div class="property-details">
+                            <div class="detail-item">
+                                <span class="detail-value">${caracteristicas.recamaras || '?'}</span>
+                                <span class="detail-label">Recámaras</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-value">${caracteristicas.banos || '?'}</span>
+                                <span class="detail-label">Baños</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-value">${caracteristicas.estacionamientos || '0'}</span>
+                                <span class="detail-label">Estacion.</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }
+
+        // Mostrar paginación
+        function mostrarPaginacion(data) {
+            const pagination = document.getElementById('pagination');
+            
+            if (data.total_paginas <= 1) {
+                pagination.style.display = 'none';
+                return;
+            }
+
+            let html = '';
+            
+            // Botón anterior
+            html += `<button ${!data.tiene_anterior ? 'disabled' : ''} onclick="cambiarPagina(${currentPage - 1})">‹ Anterior</button>`;
+            
+            // Números de página
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            if (startPage > 1) {
+                html += `<button onclick="cambiarPagina(1)">1</button>`;
+                if (startPage > 2) html += '<span>...</span>';
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="${i === currentPage ? 'current-page' : ''}" onclick="cambiarPagina(${i})">${i}</button>`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span>...</span>';
+                html += `<button onclick="cambiarPagina(${totalPages})">${totalPages}</button>`;
+            }
+            
+            // Botón siguiente
+            html += `<button ${!data.tiene_siguiente ? 'disabled' : ''} onclick="cambiarPagina(${currentPage + 1})">Siguiente ›</button>`;
+            
+            pagination.innerHTML = html;
+            pagination.style.display = 'flex';
+        }
+
+        // Cambiar página
+        function cambiarPagina(page) {
+            if (page !== currentPage && page >= 1 && page <= totalPages) {
+                cargarPropiedades(page);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // Actualizar información de resultados
+        function actualizarInfoResultados(data) {
+            const info = document.getElementById('resultsInfo');
+            const inicio = (data.pagina - 1) * data.por_pagina + 1;
+            const fin = Math.min(inicio + data.por_pagina - 1, data.total);
+            
+            info.textContent = `Mostrando ${inicio}-${fin} de ${data.total.toLocaleString()} propiedades`;
+        }
+
+        // Aplicar filtros
+        function aplicarFiltros() {
+            currentFilters = {
+                ciudad: document.getElementById('ciudad').value,
+                tipo_propiedad: document.getElementById('tipoPropiedad').value,
+                tipo_operacion: document.getElementById('tipoOperacion').value,
+                precio_min: document.getElementById('precioMin').value,
+                precio_max: document.getElementById('precioMax').value
+            };
+            
+            // Remover filtros vacíos
+            Object.keys(currentFilters).forEach(key => {
+                if (!currentFilters[key]) delete currentFilters[key];
+            });
+            
+            currentPage = 1;
+            cargarPropiedades(1);
+        }
+
+        // Limpiar filtros
+        function limpiarFiltros() {
+            document.getElementById('ciudad').value = '';
+            document.getElementById('tipoPropiedad').value = '';
+            document.getElementById('tipoOperacion').value = '';
+            document.getElementById('precioMin').value = '';
+            document.getElementById('precioMax').value = '';
+            document.getElementById('busqueda').value = '';
+            
+            currentFilters = {};
+            currentPage = 1;
+            cargarPropiedades(1);
+        }
+
+        // Búsqueda de texto
+        async function buscarPropiedades() {
+            const termino = document.getElementById('busqueda').value.trim();
+            
+            if (termino.length < 2) {
+                cargarPropiedades(1);
+                return;
+            }
+
+            if (isLoading) return;
+            
+            isLoading = true;
+            mostrarLoading(true);
+            
+            try {
+                const params = new URLSearchParams({
+                    q: termino,
+                    pagina: 1,
+                    por_pagina: 20
+                });
+
+                const response = await fetch(`${API_BASE}/buscar?${params}`);
+                const data = await response.json();
+                
+                currentPage = data.pagina;
+                totalPages = data.total_paginas;
+                
+                mostrarPropiedades(data.propiedades);
+                mostrarPaginacion(data);
+                actualizarInfoResultados(data);
+                
+            } catch (error) {
+                console.error('Error en búsqueda:', error);
+                mostrarError('Error en la búsqueda');
+            } finally {
+                isLoading = false;
+                mostrarLoading(false);
+            }
+        }
+
+        // Ver detalle de propiedad
+        function verDetalle(propiedadId) {
+            // Implementar modal o página de detalle
+            console.log('Ver detalle de:', propiedadId);
+            // window.open(`/detalle/${propiedadId}`, '_blank');
+        }
+
+        // Mostrar/ocultar loading
+        function mostrarLoading(show) {
+            const loading = document.getElementById('loadingIndicator');
+            const grid = document.getElementById('propertiesGrid');
+            const pagination = document.getElementById('pagination');
+            
+            loading.style.display = show ? 'flex' : 'none';
+            grid.style.display = show ? 'none' : 'grid';
+            pagination.style.display = show ? 'none' : 'flex';
+        }
+
+        // Mostrar error
+        function mostrarError(mensaje) {
+            const grid = document.getElementById('propertiesGrid');
+            grid.innerHTML = `<div class="loading">❌ ${mensaje}</div>`;
+            grid.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 

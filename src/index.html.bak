@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Catálogo de Propiedades</title>
+  <style>
+    :root {
+      --primary-color: #234;
+      --text-color: #333;
+      --border-color: #ddd;
+      --hover-color: #f5f5f5;
+      --price-color: #059669;
+      --card-shadow: 0 2px 6px rgba(0,0,0,.1);
+      --transition: all 0.3s ease;
+    }
+    
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
+                 "Helvetica Neue", Arial, sans-serif; 
+      background: #f5f5f5; 
+      margin: 0; 
+      padding: 0;
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    header { 
+      background: var(--primary-color); 
+      color: #fff; 
+      padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,.1);
+    }
+    
+    header h1 { 
+      margin: 0 0 .5rem; 
+      font-size: 2rem;
+      font-weight: 600;
+    }
+    
+    header p { 
+      margin: 0;
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+    
+    main { 
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 98px);
+    }
+    
+    #filters {
+      width: 280px;
+      background: #fff;
+      padding: 1.5rem;
+      border-right: 1px solid var(--border-color);
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    
+    #filters section { 
+      margin-bottom: 2rem;
+    }
+    
+    #filters section:last-child {
+      margin-bottom: 1rem;
+    }
+    
+    #filters section strong { 
+      display: block;
+      margin-bottom: 1rem;
+      font-size: 1rem;
+      color: var(--text-color);
+      text-transform: capitalize;
+    }
+    
+    #filters label { 
+      display: block;
+      margin-bottom: .75rem;
+      cursor: pointer;
+      transition: var(--transition);
+      padding: .25rem;
+      border-radius: 4px;
+      text-transform: capitalize;
+    }
+    
+    #filters label:hover {
+      background: var(--hover-color);
+    }
+    
+    #filters input[type="text"],
+    #filters input[type="number"],
+    #filters select { 
+      width: 100%;
+      padding: .5rem;
+      margin-top: .5rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: .9rem;
+    }
+    
+    #filters input[type="checkbox"] {
+      margin-right: .5rem;
+    }
+    
+    #cardsContainer {
+      flex: 1;
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+      overflow-y: auto;
+      align-content: start;
+      background: #f5f5f5;
+    }
+    
+    .card { 
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: var(--transition);
+      height: fit-content;
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    }
+    
+    .card img { 
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      background: #eee;
+      display: block;
+      transition: var(--transition);
+    }
+    
+    .card:hover img {
+      transform: scale(1.05);
+    }
+    
+    .card-content { 
+      padding: 1.25rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+    
+    .card-content h3 { 
+      margin: 0 0 .75rem;
+      font-size: 1.2rem;
+      line-height: 1.4;
+      color: var(--text-color);
+      text-transform: capitalize;
+    }
+    
+    .card-content h3 a { 
+      color: inherit;
+      text-decoration: none;
+      transition: var(--transition);
+    }
+    
+    .card-content h3 a:hover { 
+      color: var(--price-color);
+    }
+    
+    .location { 
+      font-size: .95rem;
+      color: #666;
+      margin-bottom: 1rem;
+      line-height: 1.4;
+      text-transform: capitalize;
+    }
+    
+    .price { 
+      color: var(--price-color);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+    }
+    
+    .fields { 
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+      font-size: .9rem;
+      margin-bottom: 1rem;
+      color: #555;
+    }
+    
+    .fields > div {
+      padding: .5rem;
+      background: #f8f8f8;
+      border-radius: 4px;
+      text-align: center;
+    }
+    
+    details { 
+      margin-top: auto;
+      border-top: 1px solid var(--border-color);
+      padding-top: 1rem;
+    }
+    
+    details summary { 
+      cursor: pointer;
+      color: #666;
+      font-weight: 500;
+      margin-bottom: .75rem;
+      outline: none;
+    }
+    
+    details summary:hover {
+      color: var(--price-color);
+    }
+    
+    details p {
+      margin: 0;
+      font-size: .95rem;
+      line-height: 1.5;
+      color: #444;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+    
+    .no-results { 
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 3rem;
+      color: #666;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+    }
+    
+    @media (max-width: 768px) {
+      main {
+        flex-direction: column;
+        height: auto;
+      }
+      
+      #filters {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+      }
+      
+      #cardsContainer {
+        height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Catálogo de Propiedades</h1>
+    <p id="resumen">Encuentra tu próxima propiedad</p>
+  </header>
+
+  <main>
+    <div id="filters">
+      <section>
+        <strong>🔍 Buscar</strong>
+        <input type="text" id="searchInput" placeholder="Buscar por ubicación, características...">
+      </section>
+
+      <section>
+        <strong>💰 Precio</strong>
+        <input type="number" id="precioMin" placeholder="Precio mínimo">
+        <input type="number" id="precioMax" placeholder="Precio máximo">
+      </section>
+
+      <section>
+        <strong>🏠 Tipo de Propiedad</strong>
+        <div id="filterTipoPropiedad"></div>
+      </section>
+
+      <section>
+        <strong>📍 Ciudad</strong>
+        <div id="filterCiudad"></div>
+      </section>
+
+      <section>
+        <strong>🌟 Amenidades</strong>
+        <div id="filterAmenidades"></div>
+      </section>
+
+      <section>
+        <strong>📋 Características</strong>
+        <div id="filterCaracteristicas"></div>
+      </section>
+
+      <section>
+        <strong>📄 Legal</strong>
+        <label>
+          <input type="checkbox" name="escrituras"> 
+          Escrituras (<span id="countEscrituras">0</span>)
+        </label>
+        <label>
+          <input type="checkbox" name="cesion_derechos"> 
+          Cesión de derechos (<span id="countCesion">0</span>)
+        </label>
+      </section>
+
+      <section>
+        <strong>⚡️ Ordenar</strong>
+        <select id="sortOrder">
+          <option value="none">Sin orden</option>
+          <option value="asc">Precio: Menor a mayor</option>
+          <option value="desc">Precio: Mayor a menor</option>
+        </select>
+      </section>
+    </div>
+
+    <div id="cardsContainer"></div>
+  </main>
+
+  <script>
+    let propiedades = [];
+    let filtrosActivos = {
+      texto: '',
+      precioMin: null,
+      precioMax: null,
+      operacion: [],
+      tipoPropiedad: [],
+      ciudad: [],
+      amenidades: [],
+      caracteristicas: [],
+      escrituras: false,
+      cesionDerechos: false
+    };
+
+    // Función para formatear precios
+    function formatearPrecio(precioData) {
+      if (!precioData) return 'Precio no disponible';
+      
+      // Si es un objeto con texto_original
+      if (typeof precioData === 'object' && precioData.texto_original) {
+        return precioData.texto_original;
+      }
+      
+      // Si es un objeto con valor_normalizado
+      if (typeof precioData === 'object' && precioData.valor_normalizado) {
+        return new Intl.NumberFormat('es-MX', {
+          style: 'currency',
+          currency: 'MXN',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(precioData.valor_normalizado);
+      }
+      
+      // Si es un objeto con valor
+      if (typeof precioData === 'object' && precioData.valor) {
+        return new Intl.NumberFormat('es-MX', {
+          style: 'currency',
+          currency: 'MXN',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(precioData.valor);
+      }
+      
+      // Si es un string o número directo
+      if (typeof precioData === 'string' || typeof precioData === 'number') {
+        const valor = parseFloat(String(precioData).replace(/[^\\d.]/g, ''));
+        if (!isNaN(valor)) {
+          return new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: 'MXN',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          }).format(valor);
+        }
+      }
+      
+      return 'Precio no disponible';
+    }
+
+    // Función para actualizar el resumen
+    function actualizarResumen() {
+      const resumen = document.getElementById('resumen');
+      if (resumen) {
+        resumen.textContent = `${propiedades.length} propiedades disponibles`;
+      }
+    }
+
+    // Cargar datos al iniciar
+    async function cargarDatos() {
+      try {
+        console.log('Intentando cargar propiedades...');
+        const response = await fetch('./resultados/propiedades_estructuradas.json');
+        
+        if (!response.ok) {
+          throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data || !data.propiedades || !Array.isArray(data.propiedades)) {
+          throw new Error('Formato de datos inválido');
+        }
+        
+        propiedades = data.propiedades;
+        console.log('Propiedades cargadas:', propiedades.length);
+        
+        inicializarFiltros();
+        actualizarResumen();
+        mostrarPropiedades();
+      } catch (error) {
+        console.error('Error:', error);
+        const container = document.getElementById('cardsContainer');
+        if (container) {
+          container.innerHTML = `
+            <div class="no-results">
+              <h3>Error cargando propiedades</h3>
+              <p>Hubo un problema al cargar los datos: ${error.message}</p>
+            </div>
+          `;
+        }
+      }
+    }
+
+    // Esperar a que el DOM esté completamente cargado
+    document.addEventListener('DOMContentLoaded', () => {
+      cargarDatos();
+    });
+
+    function inicializarFiltros() {
+      try {
+        // Inicializar ciudades
+        const ciudades = [...new Set(propiedades.map(p => p.ubicacion?.ciudad).filter(Boolean))].sort();
+        const filterCiudad = document.getElementById('filterCiudad');
+        if (filterCiudad) {
+          filterCiudad.innerHTML = '';  // Limpiar contenido existente
+          ciudades.forEach(ciudad => {
+            const count = propiedades.filter(p => p.ubicacion?.ciudad === ciudad).length;
+            filterCiudad.innerHTML += `
+              <label>
+                <input type="checkbox" name="ciudad" value="${ciudad}"> 
+                ${ciudad} (${count})
+              </label>
+            `;
+          });
+        }
+
+        // Inicializar tipos de propiedad
+        const tiposPropiedad = [...new Set(propiedades.map(p => p.propiedad?.tipo_propiedad).filter(Boolean))].sort();
+        const filterTipoPropiedad = document.getElementById('filterTipoPropiedad');
+        if (filterTipoPropiedad) {
+          filterTipoPropiedad.innerHTML = '';  // Limpiar contenido existente
+          tiposPropiedad.forEach(tipo => {
+            const count = propiedades.filter(p => p.propiedad?.tipo_propiedad === tipo).length;
+            filterTipoPropiedad.innerHTML += `
+              <label>
+                <input type="checkbox" name="tipoPropiedad" value="${tipo}"> 
+                ${tipo} (${count})
+              </label>
+            `;
+          });
+        }
+
+        // Inicializar amenidades
+        const amenidadesComunes = ['alberca', 'jardin', 'estacionamiento', 'areas_comunes'];
+        const filterAmenidades = document.getElementById('filterAmenidades');
+        if (filterAmenidades) {
+          filterAmenidades.innerHTML = '';  // Limpiar contenido existente
+          amenidadesComunes.forEach(amenidad => {
+            const count = propiedades.filter(p => {
+              if (!p.amenidades) return false;
+              const amenidadObj = p.amenidades[amenidad];
+              return amenidadObj && (
+                amenidadObj.presente === true ||
+                amenidadObj.presentes === true ||
+                (Array.isArray(amenidadObj.tipos) && amenidadObj.tipos.length > 0)
+              );
+            }).length;
+            filterAmenidades.innerHTML += `
+              <label>
+                <input type="checkbox" name="amenidades" value="${amenidad}"> 
+                ${amenidad.replace(/_/g, ' ')} (${count})
+              </label>
+            `;
+          });
+        }
+
+        // Inicializar características
+        const caracteristicasComunes = ['recamara_planta_baja', 'un_nivel', 'opcion_crecer'];
+        const filterCaracteristicas = document.getElementById('filterCaracteristicas');
+        if (filterCaracteristicas) {
+          filterCaracteristicas.innerHTML = '';  // Limpiar contenido existente
+          caracteristicasComunes.forEach(caracteristica => {
+            const count = propiedades.filter(p => p.caracteristicas && p.caracteristicas[caracteristica] === true).length;
+            filterCaracteristicas.innerHTML += `
+              <label>
+                <input type="checkbox" name="caracteristicas" value="${caracteristica}"> 
+                ${caracteristica.replace(/_/g, ' ')} (${count})
+              </label>
+            `;
+          });
+        }
+
+        // Actualizar contadores de escrituras y cesión
+        actualizarContadores();
+
+        // Inicializar eventos de filtros
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+          searchInput.value = filtrosActivos.texto;  // Restaurar valor previo
+          searchInput.addEventListener('input', (e) => {
+            filtrosActivos.texto = e.target.value.toLowerCase();
+            mostrarPropiedades();
+          });
+        }
+
+        const precioMin = document.getElementById('precioMin');
+        if (precioMin) {
+          precioMin.value = filtrosActivos.precioMin || '';  // Restaurar valor previo
+          precioMin.addEventListener('input', (e) => {
+            filtrosActivos.precioMin = e.target.value ? parseFloat(e.target.value) : null;
+            mostrarPropiedades();
+          });
+        }
+
+        const precioMax = document.getElementById('precioMax');
+        if (precioMax) {
+          precioMax.value = filtrosActivos.precioMax || '';  // Restaurar valor previo
+          precioMax.addEventListener('input', (e) => {
+            filtrosActivos.precioMax = e.target.value ? parseFloat(e.target.value) : null;
+            mostrarPropiedades();
+          });
+        }
+
+        // Eventos para checkboxes
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+          // Restaurar estado previo del checkbox
+          const tipo = checkbox.name;
+          const valor = checkbox.value;
+          
+          switch(tipo) {
+            case 'operacion':
+              checkbox.checked = filtrosActivos.operacion.includes(valor);
+              break;
+            case 'tipoPropiedad':
+              checkbox.checked = filtrosActivos.tipoPropiedad.includes(valor);
+              break;
+            case 'ciudad':
+              checkbox.checked = filtrosActivos.ciudad.includes(valor);
+              break;
+            case 'amenidades':
+              checkbox.checked = filtrosActivos.amenidades.includes(valor);
+              break;
+            case 'caracteristicas':
+              checkbox.checked = filtrosActivos.caracteristicas.includes(valor);
+              break;
+            case 'escrituras':
+              checkbox.checked = filtrosActivos.escrituras;
+              break;
+            case 'cesion_derechos':
+              checkbox.checked = filtrosActivos.cesionDerechos;
+              break;
+          }
+          
+          checkbox.addEventListener('change', (e) => {
+            const tipo = e.target.name;
+            const valor = e.target.value;
+            
+            switch(tipo) {
+              case 'operacion':
+                if (e.target.checked) {
+                  filtrosActivos.operacion.push(valor);
+                } else {
+                  filtrosActivos.operacion = filtrosActivos.operacion.filter(v => v !== valor);
+                }
+                break;
+              case 'tipoPropiedad':
+                if (e.target.checked) {
+                  filtrosActivos.tipoPropiedad.push(valor);
+                } else {
+                  filtrosActivos.tipoPropiedad = filtrosActivos.tipoPropiedad.filter(v => v !== valor);
+                }
+                break;
+              case 'ciudad':
+                if (e.target.checked) {
+                  filtrosActivos.ciudad.push(valor);
+                } else {
+                  filtrosActivos.ciudad = filtrosActivos.ciudad.filter(v => v !== valor);
+                }
+                break;
+              case 'amenidades':
+                if (e.target.checked) {
+                  filtrosActivos.amenidades.push(valor);
+                } else {
+                  filtrosActivos.amenidades = filtrosActivos.amenidades.filter(v => v !== valor);
+                }
+                break;
+              case 'caracteristicas':
+                if (e.target.checked) {
+                  filtrosActivos.caracteristicas.push(valor);
+                } else {
+                  filtrosActivos.caracteristicas = filtrosActivos.caracteristicas.filter(v => v !== valor);
+                }
+                break;
+              case 'escrituras':
+                filtrosActivos.escrituras = e.target.checked;
+                break;
+              case 'cesion_derechos':
+                filtrosActivos.cesionDerechos = e.target.checked;
+                break;
+            }
+            
+            mostrarPropiedades();
+          });
+        });
+
+        // Ordenamiento
+        const sortOrder = document.getElementById('sortOrder');
+        if (sortOrder) {
+          sortOrder.addEventListener('change', e => {
+            mostrarPropiedades();
+          });
+        }
+      } catch (error) {
+        console.error('Error inicializando filtros:', error);
+      }
+    }
+
+    function actualizarContadores() {
+      // Actualizar contadores de escrituras y cesión
+      const countEscrituras = document.getElementById('countEscrituras');
+      const countCesion = document.getElementById('countCesion');
+      
+      if (countEscrituras) {
+        const escriturasCount = propiedades.filter(p => p.legal && p.legal.escrituras === true).length;
+        countEscrituras.textContent = escriturasCount;
+      }
+      
+      if (countCesion) {
+        const cesionCount = propiedades.filter(p => p.legal && p.legal.cesion_derechos === true).length;
+        countCesion.textContent = cesionCount;
+      }
+    }
+
+    function filtrarPropiedades() {
+      return propiedades.filter(propiedad => {
+        try {
+          // Filtro de texto
+          if (filtrosActivos.texto) {
+            const textoPropiedad = `
+              ${propiedad.titulo || ''} 
+              ${propiedad.descripcion_original || ''} 
+              ${propiedad.ubicacion?.colonia || ''} 
+              ${propiedad.ubicacion?.ciudad || ''}
+            `.toLowerCase();
+            
+            if (!textoPropiedad.includes(filtrosActivos.texto)) return false;
+          }
+
+          // Filtro de precio
+          if (propiedad.propiedad?.precio?.valor_normalizado) {
+            const precio = parseFloat(String(propiedad.propiedad.precio.valor_normalizado).replace(/[^\d.]/g, ''));
+            if (filtrosActivos.precioMin && precio < filtrosActivos.precioMin) return false;
+            if (filtrosActivos.precioMax && precio > filtrosActivos.precioMax) return false;
+          }
+
+          // Filtro de tipo de propiedad
+          if (filtrosActivos.tipoPropiedad.length > 0) {
+            if (!propiedad.propiedad?.tipo_propiedad || 
+                !filtrosActivos.tipoPropiedad.includes(propiedad.propiedad.tipo_propiedad)) {
+              return false;
+            }
+          }
+
+          // Filtro de ciudad
+          if (filtrosActivos.ciudad.length > 0) {
+            if (!propiedad.ubicacion?.ciudad || 
+                !filtrosActivos.ciudad.includes(propiedad.ubicacion.ciudad)) {
+              return false;
+            }
+          }
+
+          // Filtro de amenidades
+          if (filtrosActivos.amenidades.length > 0) {
+            const tieneAmenidad = filtrosActivos.amenidades.every(amenidad => {
+              if (!propiedad.amenidades) return false;
+              const amenidadObj = propiedad.amenidades[amenidad];
+              return amenidadObj && (
+                amenidadObj.presente === true ||
+                amenidadObj.presentes === true ||
+                (Array.isArray(amenidadObj.tipos) && amenidadObj.tipos.length > 0)
+              );
+            });
+            if (!tieneAmenidad) return false;
+          }
+
+          // Filtro de características
+          if (filtrosActivos.caracteristicas.length > 0) {
+            const tieneCaracteristica = filtrosActivos.caracteristicas.every(caracteristica => {
+              return propiedad.caracteristicas && propiedad.caracteristicas[caracteristica] === true;
+            });
+            if (!tieneCaracteristica) return false;
+          }
+
+          // Filtro de escrituras
+          if (filtrosActivos.escrituras) {
+            if (!propiedad.legal || propiedad.legal.escrituras !== true) return false;
+          }
+
+          // Filtro de cesión de derechos
+          if (filtrosActivos.cesionDerechos) {
+            if (!propiedad.legal || propiedad.legal.cesion_derechos !== true) return false;
+          }
+
+          return true;
+        } catch (error) {
+          console.error('Error filtrando propiedad:', error, propiedad);
+          return false;
+        }
+      });
+    }
+
+    function mostrarPropiedades() {
+      const propiedadesFiltradas = filtrarPropiedades();
+      const container = document.getElementById('cardsContainer');
+      container.innerHTML = '';
+      
+      if (propiedadesFiltradas.length === 0) {
+        container.innerHTML = `
+          <div class="no-results">
+            <h3>No se encontraron propiedades</h3>
+            <p>Intenta ajustar los filtros de búsqueda</p>
+          </div>
+        `;
+        return;
+      }
+      
+      // Ordenar propiedades según el criterio seleccionado
+      const sortOrder = document.getElementById('sortOrder').value;
+      if (sortOrder !== 'none') {
+        propiedadesFiltradas.sort((a, b) => {
+          const precioA = a.precio?.valor || 0;
+          const precioB = b.precio?.valor || 0;
+          return sortOrder === 'asc' ? precioA - precioB : precioB - precioA;
+        });
+      }
+      
+      propiedadesFiltradas.forEach(propiedad => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        // Obtener la imagen de portada
+        let imagenUrl = 'resultados/Imagen_no_disponible.jpg';
+        if (propiedad.datos_originales?.imagen_portada) {
+          imagenUrl = 'resultados/' + propiedad.datos_originales.imagen_portada.ruta_relativa;
+        } else if (propiedad.datos_originales?.imagenes && propiedad.datos_originales.imagenes.length > 0) {
+          const primeraImagen = propiedad.datos_originales.imagenes[0];
+          imagenUrl = primeraImagen.ruta_relativa ? 'resultados/' + primeraImagen.ruta_relativa : primeraImagen;
+        }
+        
+        // Obtener el título y descripción de la propiedad
+        let titulo = propiedad.datos_originales?.titulo || '';
+        let descripcion = propiedad.datos_originales?.descripcion || '';
+        
+        if (!titulo) {
+          const tipo = propiedad.propiedad?.tipo_propiedad || '';
+          const ciudad = propiedad.ubicacion?.ciudad || '';
+          titulo = `${tipo} en ${ciudad}`;
+        }
+        
+        // Capitalizar el título
+        titulo = titulo.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+        
+        // Formatear ubicación
+        const ubicacion = [
+          propiedad.ubicacion?.colonia,
+          propiedad.ubicacion?.ciudad
+        ].filter(Boolean).join(', ');
+
+        // Formatear precio y tipo de operación
+        const tipoOperacion = propiedad.propiedad?.tipo_operacion || '';
+        const precio = propiedad.datos_originales?.precio || '';
+        const precioTexto = precio ? `${precio} - ${tipoOperacion}` : 'Precio no disponible';
+
+        card.innerHTML = `
+          <div class="card-image">
+            <a href="${propiedad.datos_originales?.url || '#'}" target="_blank">
+              <img src="${imagenUrl}" alt="${titulo}" onerror="this.src='resultados/Imagen_no_disponible.jpg'">
+            </a>
+          </div>
+          <div class="card-content">
+            <h3><a href="${propiedad.datos_originales?.url || '#'}" target="_blank">${titulo}</a></h3>
+            <div class="location">📍 ${ubicacion}</div>
+            <div class="price">💰 ${precioTexto}</div>
+            <div class="fields">
+              ${propiedad.caracteristicas?.recamaras ? 
+                `<div>🛏️ ${propiedad.caracteristicas.recamaras} recámaras</div>` : ''}
+              ${propiedad.caracteristicas?.banos ? 
+                `<div>🚿 ${propiedad.caracteristicas.banos} baños</div>` : ''}
+              ${propiedad.caracteristicas?.estacionamientos ? 
+                `<div>🚗 ${propiedad.caracteristicas.estacionamientos} estacionamientos</div>` : ''}
+              ${propiedad.caracteristicas?.superficie_construccion ? 
+                `<div>🏗️ ${propiedad.caracteristicas.superficie_construccion}m² construcción</div>` : ''}
+              ${propiedad.caracteristicas?.superficie_terreno ? 
+                `<div>📐 ${propiedad.caracteristicas.superficie_terreno}m² terreno</div>` : ''}
+            </div>
+            <details>
+              <summary>Ver descripción</summary>
+              <p>${descripcion}</p>
+            </details>
+          </div>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>

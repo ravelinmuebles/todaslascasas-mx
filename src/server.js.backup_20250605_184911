@@ -1,0 +1,121 @@
+// Node.js + Express para servir archivos estáticos
+const express = require("express");
+const path = require("path");
+const compression = require('compression');
+const cors = require('cors');
+
+// Importar e instanciar el indexador
+const IndicesPropiedades = require('./src/indexador');
+const indicesPropiedades = new IndicesPropiedades();
+
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+// Middleware
+app.use(compression());
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
+app.use('/resultados', express.static(path.join(__dirname, 'resultados')));
+
+// Middleware para logging
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
+// Ruta para index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/index.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Endpoint para obtener índices
+app.get('/api/indices', async (req, res) => {
+    try {
+        const estadisticas = await indicesPropiedades.cargarDatos();
+        res.json(estadisticas);
+    } catch (error) {
+        console.error('Error al obtener índices:', error);
+        res.status(500).json({ 
+            error: 'Error interno del servidor',
+            mensaje: error.message 
+        });
+    }
+});
+
+// Endpoint para obtener propiedades filtradas y paginadas
+app.get('/api/propiedades', async (req, res) => {
+    try {
+        const {
+            page = 1,
+            limit = 20,
+            ciudad,
+            busqueda,
+            precioMin,
+            precioMax,
+            tipoOperacion,
+            tipoPropiedad
+        } = req.query;
+
+        // Validar parámetros
+        const parametros = {
+            page: Math.max(1, parseInt(page)),
+            limit: Math.min(100, Math.max(1, parseInt(limit))),
+            ciudad: ciudad ? ciudad.toLowerCase() : undefined,
+            busqueda: busqueda ? busqueda.trim() : undefined,
+            precioMin: precioMin ? parseFloat(precioMin) : undefined,
+            precioMax: precioMax ? parseFloat(precioMax) : undefined,
+            tipoOperacion: tipoOperacion ? tipoOperacion.toLowerCase() : undefined,
+            tipoPropiedad: tipoPropiedad ? tipoPropiedad.toLowerCase() : undefined
+        };
+
+        const resultado = await indicesPropiedades.buscar(parametros);
+
+        if (!resultado || !resultado.propiedades) {
+            throw new Error('Resultado de búsqueda inválido');
+        }
+
+        res.json(resultado);
+
+    } catch (error) {
+        console.error('Error al obtener propiedades:', error);
+        res.status(500).json({ 
+            error: 'Error al procesar la búsqueda',
+            mensaje: error.message 
+        });
+    }
+});
+
+// Manejo de errores
+app.use((err, req, res, next) => {
+    console.error('Error no manejado:', err);
+    res.status(500).json({ 
+        error: 'Error interno del servidor',
+        mensaje: err.message 
+    });
+});
+
+// Iniciar servidor
+const server = app.listen(PORT, async () => {
+    try {
+        // Cargar datos iniciales
+        await indicesPropiedades.cargarDatos();
+        console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    } catch (error) {
+        console.error('Error al iniciar servidor:', error);
+        process.exit(1);
+    }
+});
+
+// Manejo de señales para cierre graceful
+process.on('SIGTERM', () => {
+    console.log('Recibida señal SIGTERM. Cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado.');
+        process.exit(0);
+    });
+});

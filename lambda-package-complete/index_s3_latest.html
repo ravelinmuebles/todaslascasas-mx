@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📍 Todas las Casas - Catálogo de Propiedades</title>
+    <!-- Versión v3.1.0 - Corrección imágenes S3 - 01/07/2025 17:45 -->
+    <!-- Versión v3.2.15 - fix recamara PB filter - 09/07/2025 -->
+    <!-- Versión v3.2.16 - refine recamara PB negation handling - 09/07/2025 -->
+    <!-- Versión v3.2.17 - botón filtros arriba · fix ordenamiento · login Google - 09/07/2025 -->
+    <!-- Versión v3.3.2 - admin delete property button rendered - 12/07/2025 -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        /* HEADER */
+        .header {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 95%;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .user-info {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #f3f4f6;
+            border-radius: 8px;
+        }
+
+        .user-info.show {
+            display: flex;
+        }
+
+        .logout-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        /* LAYOUT PRINCIPAL - 100% ANCHO */
+        .main-container {
+            max-width: 95%;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 2rem;
+        }
+
+        /* SIDEBAR DE FILTROS */
+        .filters-sidebar {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+
+        .filters-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            color: #1f2937;
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .filter-input, .filter-select {
+            width: 100%;
+            padding: 0.7rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: white;
+        }
+
+        .filter-input:focus, .filter-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .price-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .checkbox-group {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 0.5rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 0.3rem 0;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 0.5rem;
+        }
+
+        .checkbox-item label {
+            font-size: 0.85rem;
+            color: #4b5563;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .clear-filters {
+            width: 100%;
+            background: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 8px;
+            margin-bottom: 20px;
+        }
+
+        .clear-filters:hover {
+            background: #b91c1c;
+        }
+
+        /* ÁREA DE PROPIEDADES */
+        .properties-area {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .properties-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .properties-count {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .sort-select {
+            padding: 1rem 1.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: white;
+            appearance: none;
+            cursor: pointer;
+            min-width: 200px;
+            font-weight: 500;
+        }
+
+        .sort-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .view-toggle {
+            display: flex;
+            background: #f3f4f6;
+            border-radius: 6px;
+            padding: 0.2rem;
+        }
+
+        .view-btn {
+            padding: 0.5rem 0.8rem;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .view-btn.active {
+            background: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* GRID DE PROPIEDADES - 3 COLUMNAS POR DEFECTO */
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* VISTA LISTA */
+        .properties-grid.list-view {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .properties-grid.list-view .property-card {
+            display: flex;
+            flex-direction: row;
+            height: auto;
+            min-height: 200px;
+        }
+
+        .properties-grid.list-view .property-image {
+            width: 300px;
+            height: 200px;
+            flex-shrink: 0;
+        }
+
+        .properties-grid.list-view .property-content {
+            flex: 1;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .properties-grid.list-view .description-content {
+            display: block !important;
+            margin-top: 0.8rem;
+            color: #6b7280;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            max-height: none;
+            overflow: visible;
+            text-overflow: none;
+        }
+
+        .properties-grid.list-view .description-toggle {
+            display: none;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 1600px) {
+            .properties-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .properties-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .properties-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .filters-sidebar {
+                position: static;
+            }
+            }
+            
+        /* TARJETAS DE PROPIEDADES */
+            .property-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border: 1px solid #e5e7eb;
+        }
+
+        .property-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .property-image {
+            width: 100%;
+            height: 200px;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            font-size: 0.9rem;
+            position: relative;
+            border: none;
+        }
+
+        .property-content {
+            padding: 1.2rem;
+        }
+
+        .property-price {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #059669;
+            margin-bottom: 0.5rem;
+        }
+
+        .property-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+            line-height: 1.3;
+        }
+
+        .property-location {
+            color: #6b7280;
+                    font-size: 0.9rem;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .property-features {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        /* BOTÓN DESCRIPCIÓN EXPANDIBLE */
+        .description-container {
+            margin-bottom: 1rem;
+        }
+
+        .description-toggle {
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 0.8rem 1.2rem;
+            width: 100%;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #475569;
+            transition: all 0.3s ease;
+                    display: flex; 
+            justify-content: space-between;
+                    align-items: center; 
+                    text-align: left; 
+        }
+
+        .description-toggle:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            color: #334155;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .description-toggle.expanded {
+            background: #eff6ff;
+            border-color: #3b82f6;
+            color: #1e40af;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .description-toggle::after {
+            content: "📖";
+            font-size: 1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .description-toggle.expanded::after {
+            content: "📖";
+            transform: rotate(180deg);
+        }
+
+        .description-content {
+            display: none;
+            padding: 1.2rem;
+            background: #f8fafc;
+            border: 2px solid #3b82f6;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #475569;
+            max-height: 200px;
+            overflow-y: auto;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                padding: 0 1.2rem;
+            }
+            to {
+                opacity: 1;
+                max-height: 200px;
+                padding: 1.2rem;
+            }
+        }
+
+        .description-content.show {
+            display: block;
+        }
+
+        /* ID DE PUBLICACIÓN */
+        .property-id {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            font-family: monospace;
+            margin-bottom: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        /* BUSCADOR MEJORADO */
+        .search-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: white;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-placeholder {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 0.3rem;
+        }
+
+        .property-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-view {
+            flex: 1;
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-view:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-favorite {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.6rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-favorite:hover {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .btn-favorite.active {
+            background: #fbbf24;
+            border-color: #f59e0b;
+            color: white;
+        }
+
+        /* LOADING Y ESTADOS */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .no-results h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* PAGINACIÓN */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .pagination button {
+            padding: 0.6rem 1rem;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 6px;
+                    cursor: pointer; 
+                    font-size: 0.9rem; 
+            transition: all 0.2s ease;
+        }
+
+        .pagination button:hover {
+            background: #f3f4f6;
+        }
+
+        .pagination button.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* MODALES */
+        .modal {
+            display: none;
+                position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+                z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0.5rem;
+                border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .version-badge {
+            font-size: 0.75rem;
+            background: #2563eb;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+        .property-image { position: relative; }
+        .property-label {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          padding: 2px 6px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #fff;
+          border-radius: 4px;
+          text-transform: uppercase;
+        }
+        .property-label.venta { background: #2563eb; }
+        .property-label.renta { background: #10b981; }
+
+        /* ----- Favoritos horizontal cards ----- */
+        .favorite-h-card{display:flex;gap:0.75rem;align-items:center;border:1px solid #e5e7eb;border-radius:8px;padding:0.6rem;margin-bottom:0.6rem;background:#fff;}
+        .favorite-h-card img{width:120px;height:80px;object-fit:cover;border-radius:4px;}
+        .favorite-h-card .fh-info{flex:1;display:flex;flex-direction:column;gap:0.2rem;}
+        .favorite-h-card .fh-info h4{margin:0;font-size:0.95rem;color:#111827;}
+        .favorite-h-card .fh-info p{margin:0;font-size:0.8rem;color:#4b5563;}
+        .favorite-h-card .fh-actions{display:flex;gap:0.4rem;margin-top:0.3rem;flex-wrap:wrap;}
+        .favorite-h-card .btn-remove{position:static;padding:0.25rem 0.4rem;border:1px solid #ef4444;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;}
+        /* carpetas */
+        .folder-tabs button{background:#ffffff;border:1px solid #d1d5db;color:#374151;padding:0.25rem 0.6rem;border-radius:4px;cursor:pointer;}
+        .folder-tabs button.active-tab{background:#e5e7eb;color:#111827;font-weight:600;}
+        /* botón borrar publicación (admin) */
+        .btn-delete{
+            background:#f3f4f6;
+            border:1px solid #d1d5db;
+            border-radius:6px;
+            padding:0.6rem;
+            cursor:pointer;
+            transition:all 0.2s ease;
+        }
+        .btn-delete:hover{
+            background:#fee2e2;
+            border-color:#ef4444;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.3</span></div>
+            <div class="header-actions">
+                <div class="user-info" id="userInfo">
+                    <span id="userName">Usuario</span>
+                    <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+                    </div>
+                <button class="btn btn-secondary" onclick="showFavorites()">⭐ Mis Favoritos</button>
+                <button class="btn btn-secondary" onclick="showLeads()">🔥 Mis Leads</button>
+                <button class="btn btn-secondary" onclick="showRavelLeads()">🏆 Ravel Leads</button>
+                <button class="btn btn-secondary" onclick="showAdminModal()">⚙️ Admin</button>
+                <button class="btn btn-primary" id="googleLoginBtn" onclick="iniciarLoginGoogle()">🔐 Login Google</button>
+                    </div>
+                </div>
+    </header>
+
+    <!-- OVERLAY DE CARGA -->
+    <div id="loading-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.8);z-index:9999;align-items:center;justify-content:center;font-size:1.2rem;color:#1f2937;font-weight:600;">
+        ⏳ Espere, cargando propiedades...
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="main-container">
+        <!-- SIDEBAR DE FILTROS -->
+        <aside class="filters-sidebar">
+            <h2 class="filters-title">Filtros</h2>
+            <button class="clear-filters" onclick="clearAllFilters()" style="margin-bottom: 12px;">🗑️ Limpiar Filtros</button>
+            
+            
+            <!-- NUEVO: Control de Paginación -->
+            <div class="filter-group">
+                <label class="filter-label">📄 Propiedades por página</label>
+                <select class="filter-select" id="pagination-select" onchange="changePaginationLimit(parseInt(this.value))">
+                    <option value="100">100 propiedades</option>
+                    <option value="200">200 propiedades</option>
+                    <option value="400">400 propiedades</option>
+                    <option value="500">500 propiedades</option>
+                    <option value="6160">Todas las propiedades</option>
+                </select>
+            </div>
+            
+            <!-- Filtro de Búsqueda -->
+            <div class="filter-group">
+                <label class="filter-label">Búsqueda Global</label>
+                <div class="search-container">
+                    <input type="text" class="search-input" id="search-input" placeholder="ID, descripción, ubicación, precio...">
+                    <div class="search-placeholder">Busca por ID, contenido, ciudad o precio</div>
+                    </div>
+                </div>
+            
+            <!-- Filtro de Precio -->
+            <div class="filter-group">
+                <label class="filter-label">Rango de Precio</label>
+                <div class="price-range">
+                    <input type="number" class="filter-input" id="price-min" placeholder="Mín">
+                    <input type="number" class="filter-input" id="price-max" placeholder="Máx">
+                    </div>
+                    </div>
+
+            <!-- Tipo de Operación -->
+            <div class="filter-group">
+                <label class="filter-label">Tipo de Operación</label>
+                <div class="checkbox-group" id="operacion-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="op-venta" value="Venta">
+                        <label for="op-venta">Venta</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="op-renta" value="Renta">
+                        <label for="op-renta">Renta</label>
+                    </div>
+                        </div>
+                    </div>
+                    
+            <!-- Tipo de Propiedad -->
+            <div class="filter-group">
+                <label class="filter-label">Tipo de Propiedad</label>
+                <div class="checkbox-group" id="tipo-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tipo-casa" value="Casa">
+                        <label for="tipo-casa">Casa</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tipo-departamento" value="Departamento">
+                        <label for="tipo-departamento">Departamento</label>
+                </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tipo-terreno" value="Terreno">
+                        <label for="tipo-terreno">Terreno</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="tipo-bodega" value="Bodega">
+                            <label for="tipo-bodega">Bodega</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="tipo-local" value="Local">
+                            <label for="tipo-local">Local</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="tipo-oficina" value="Oficina">
+                            <label for="tipo-oficina">Oficina</label>
+                        </div>
+                        </div>
+                        </div>
+                        
+            <!-- Ciudad -->
+            <div class="filter-group">
+                <label class="filter-label">Ciudad</label>
+                <div class="checkbox-group" id="ciudad-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-cuernavaca" value="Cuernavaca">
+                        <label for="ciudad-cuernavaca">Cuernavaca</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-temixco" value="Temixco">
+                        <label for="ciudad-temixco">Temixco</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-jiutepec" value="Jiutepec">
+                        <label for="ciudad-jiutepec">Jiutepec</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ciudad-emilianozapata" value="Emiliano Zapata">
+                        <label for="ciudad-emilianozapata">Emiliano Zapata</label>
+                    </div>
+                </div>
+                        </div>
+                        
+            <!-- Recámaras -->
+            <div class="filter-group">
+                <label class="filter-label">Recámaras</label>
+                <div class="checkbox-group" id="recamaras-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-1" value="1">
+                        <label for="rec-1">1 recámara</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-2" value="2">
+                        <label for="rec-2">2 recámaras</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-3" value="3">
+                        <label for="rec-3">3 recámaras</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-4" value="4+">
+                        <label for="rec-4">4+ recámaras</label>
+                    </div>
+                </div>
+                        </div>
+                        
+            <!-- Características -->
+            <div class="filter-group">
+                <label class="filter-label">Características</label>
+                <div class="checkbox-group" id="caracteristicas-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-piscina" value="piscina">
+                        <label for="carac-piscina">🏊 Piscina</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-jardin" value="jardin">
+                        <label for="carac-jardin">🌿 Jardín</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-cochera" value="cochera">
+                        <label for="carac-cochera">🚗 Cochera</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="carac-terraza" value="terraza">
+                        <label for="carac-terraza">🏠 Terraza</label>
+                    </div>
+                    </div>
+                    </div>
+                    
+            <!-- Seguridad -->
+            <div class="filter-group">
+                <label class="filter-label">Seguridad</label>
+                <div class="checkbox-group" id="seguridad-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-caseta" value="caseta">
+                        <label for="seg-caseta">🏛️ Caseta</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-camaras" value="camaras">
+                        <label for="seg-camaras">📹 Cámaras</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-24h" value="24h">
+                        <label for="seg-24h">🕐 24/7</label>
+                </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="seg-controlado" value="acceso_controlado">
+                        <label for="seg-controlado">🚪 Acceso Controlado</label>
+                        </div>
+                    </div>
+            </div>
+
+            <!-- Niveles -->
+            <div class="filter-group">
+                <label class="filter-label">Niveles</label>
+                <div class="checkbox-group" id="niveles-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="niv-uno" value="un_nivel">
+                        <label for="niv-uno">🏠 Un Nivel</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="niv-dos" value="dos_niveles">
+                        <label for="niv-dos">🏢 Dos Niveles</label>
+                </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="niv-tres" value="tres_niveles">
+                        <label for="niv-tres">🏗️ Tres+ Niveles</label>
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Recámara Planta Baja -->
+            <div class="filter-group">
+                <label class="filter-label">Recámara en PB</label>
+                <div class="checkbox-group" id="recamara-pb-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-pb-si" value="si">
+                        <label for="rec-pb-si">✅ Sí</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="rec-pb-no" value="no">
+                        <label for="rec-pb-no">❌ No</label>
+                            </div>
+                </div>
+                        </div>
+                        
+            <!-- Legal -->
+            <div class="filter-group">
+                <label class="filter-label">Documentación</label>
+                <div class="checkbox-group" id="legal-container">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="leg-escrituras" value="escrituras">
+                        <label for="leg-escrituras">📋 Escrituras</label>
+                        </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="leg-cesion" value="cesion">
+                        <label for="leg-cesion">📝 Cesión</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="leg-credito" value="credito">
+                        <label for="leg-credito">💳 Acepta Crédito</label>
+                </div>
+                </div>
+            </div>
+            
+            
+        </aside>
+
+        <!-- ÁREA DE PROPIEDADES -->
+        <main class="properties-area">
+            <div class="properties-header">
+                <div class="properties-count" id="properties-count">
+                    Cargando propiedades...
+                            </div>
+                <div class="sort-controls">
+                    <select class="sort-select" id="sort-select" onchange="sortProperties()">
+                        <option value="">Sin ordenar</option>
+                        <option value="precio_asc">Precio: Menor a Mayor</option>
+                        <option value="precio_desc">Precio: Mayor a Menor</option>
+                        <option value="fecha_desc">Más Recientes</option>
+                    </select>
+                    <div class="view-toggle">
+                        <button class="view-btn" onclick="setGridView(3)">⊞ 3 Col</button>
+                        <button class="view-btn active" onclick="setGridView(4)">⊞ 4 Col</button>
+                            </div>
+                                    </div>
+                                    </div>
+
+            <!-- GRID DE PROPIEDADES -->
+            <div class="properties-grid" id="properties-container">
+                <div class="loading">
+                    <p>Cargando propiedades...</p>
+                                    </div>
+                                    </div>
+                            
+            <!-- PAGINACIÓN -->
+            <div class="pagination" id="pagination">
+                <!-- Se genera dinámicamente -->
+                                    </div>
+        </main>
+                                    </div>
+
+    <!-- MODALES -->
+    <!-- Modal de Login -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🔐 Iniciar Sesión</h2>
+                <button class="modal-close" onclick="closeModal('loginModal')">&times;</button>
+                            </div>
+            <div id="loginContent">
+                <p>Cargando sistema de login...</p>
+                        </div>
+                    </div>
+                        </div>
+                        
+    <!-- Modal de Favoritos -->
+    <div class="modal" id="favoritesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">⭐ Mis Favoritos</h2>
+                <button class="modal-close" onclick="closeModal('favoritesModal')">&times;</button>
+                                </div>
+            <div id="favoritesContent">
+                <p>No tienes favoritos guardados.</p>
+                                </div>
+                                </div>
+                        </div>
+                        
+    <!-- Modal de Leads -->
+    <div class="modal" id="leadsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🔥 Mis Leads</h2>
+                <button class="modal-close" onclick="closeModal('leadsModal')">&times;</button>
+                                </div>
+            <div id="leadsContent">
+                <p>No tienes leads registrados.</p>
+                                </div>
+                                </div>
+                        </div>
+                        
+    <!-- Modal seleccionar carpeta para favorito -->
+    <div class="modal" id="selectFolderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Guardar en carpeta</h2>
+                <button class="modal-close" onclick="closeModal('selectFolderModal')">&times;</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                <label>Carpeta:</label>
+                <select id="folderSelect" onchange="handleFolderSelectChange(this.value)"></select>
+                <input type="text" id="newFolderInput" placeholder="Nombre nueva carpeta" style="display:none;padding:0.4rem;border:1px solid #d1d5db;border-radius:4px;">
+                <button class="btn btn-primary" onclick="saveFavoriteToSelectedFolder()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <!-- SCRIPT CONFLICTIVO REMOVIDO: sistema-login-google.js interfería con API_BASE_URL -->
+    
+    <script>
+                  // CONFIGURACIÓN DE API
+        const API_BASE_URL = 'https://api.todaslascasas.mx';
+        let favoritesSet = new Set();
+        // Carpetas de favoritos (localStorage)
+        let favoriteFolders = JSON.parse(localStorage.getItem('favoriteFolders') || '[]');
+        if(favoriteFolders.length===0){favoriteFolders=['General'];}
+        let favorites = JSON.parse(localStorage.getItem('favorites') || '{}');
+        let currentFavoritesFolder = 'General';
+        let currentPropertyToSave = null;
+        // Iniciar Login con Google (redirección simple al backend)
+        function iniciarLoginGoogle(){
+          // Abrir flujo OAuth en misma pestaña
+          const url=`${API_BASE_URL}/auth/google/login`;
+          console.log('🔐 Redirigiendo a Google OAuth:',url);
+          window.location.href=url;
+        }
+        // --- Mapa de sinónimos para filtros ---
+        const CARAC_SYNONYMS = {
+            piscina: ['piscina','alberca','pool'],
+            jardin: ['jardin','patio','áreas verdes','areas verdes','garden'],
+            cochera: ['cochera','garage','garaje','estacionamiento','parking'],
+            terraza: ['terraza','balcon','balcón','roof','roof garden']
+        };
+
+        const SEGURIDAD_SYNONYMS = {
+            caseta:['caseta','vigilancia','caseta de vigilancia','garita'],
+            camaras:['cctv','cámaras','camaras','cámara','camara'],
+            '24h':['24h','24 horas','vigilancia 24','seguridad 24'],
+            acceso_controlado:['acceso controlado','portón eléctrico','porton electrico','portón automático','porton automatico','acceso restringido']
+        };
+        let currentPage = 1;
+        // Filtros activos que se mandarán a la API
+        let currentFilters = {};
+        let allProperties = [];
+        let filteredProperties = [];
+        let currentLimit = 100; // CARGAR TODAS LAS PROPIEDADES
+        let pendingApply = false;
+
+        // INICIALIZACIÓN
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFilters();
+            checkAuth();
+            loadProperties(1, currentLimit, {}); // carga inicial sin filtros
+            // FORZAR 4 columnas al cargar
+            setTimeout(() => {
+                setGridView(4);
+                console.log('✅ Grid forzado a 4 columnas');
+            }, 100);
+        });
+
+        // FUNCIÓN PARA DESCRIPCIÓN EXPANDIBLE
+        function toggleDescription(button) {
+            const container = button.parentElement;
+            const content = container.querySelector('.description-content');
+            const span = button.querySelector('span');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                button.classList.remove('expanded');
+                span.textContent = 'Ver descripción completa';
+                } else {
+                content.classList.add('show');
+                button.classList.add('expanded');
+                span.textContent = 'Ocultar descripción';
+            }
+        }
+
+        // INICIALIZAR FILTROS (SIN CHECKBOXES MARCADOS)
+        function initializeFilters() {
+            // Agregar event listeners a los filtros
+            document.getElementById('search-input').addEventListener('input', debounce(applyFilters, 300));
+            document.getElementById('price-min').addEventListener('input', debounce(applyFilters, 300));
+            document.getElementById('price-max').addEventListener('input', debounce(applyFilters, 300));
+            
+            // Event listeners para checkboxes
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', applyFilters);
+            });
+        }
+
+        // CARGAR PROPIEDADES
+        async function loadProperties(page = 1, limit = currentLimit, filters = currentFilters) {
+            try {
+                showLoading();
+                
+                // Construir query-string incluyendo filtros
+                const paramsObj = { ...filters, limit, page };
+                const qs = new URLSearchParams(paramsObj).toString();
+                const url = `${API_BASE_URL}/propiedades?${qs}`;
+                console.log('🌐 Fetch:', url);
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                        const data = await response.json();
+                console.log('📊 Datos API recibidos:', data);
+                
+                const propsPage = (data.propiedades || []).map(normalizeProperty);
+                if (page === 1) {
+                    allProperties = propsPage;
+                } else {
+                    allProperties = allProperties.concat(propsPage);
+                }
+                filteredProperties = [...allProperties];
+                sortFilteredProperties();
+                
+                console.log(`✅ Propiedades cargadas: ${allProperties.length}`);
+                console.log(`✅ Total disponible según API: ${data.total || 0}`);
+                
+                renderProperties();
+                updatePropertiesCount(data.total || allProperties.length);
+
+                // Ocultar overlay de carga al completar la petición
+                hideLoading();
+                
+                // Si hemos cargado el dataset completo y había un apply pendiente
+                if (currentLimit === 6160 && pendingApply) {
+                    pendingApply = false;
+                    hideLoading();
+                    applyFilters();
+                }
+                
+                } catch (error) {
+                console.error('❌ Error cargando propiedades:', error);
+                showError('Error al cargar propiedades: ' + error.message);
+            }
+        }
+
+        // CONSTRUIR FILTROS PARA API
+        function buildApiFilters() {
+            const filters = {};
+            
+            // Búsqueda
+            const search = document.getElementById('search-input').value.trim();
+            if (search) filters.search = search;
+            
+            // Precio
+            const priceMin = document.getElementById('price-min').value;
+            const priceMax = document.getElementById('price-max').value;
+            if (priceMin) filters.precio_min = priceMin;
+            if (priceMax) filters.precio_max = priceMax;
+            
+            // Operación
+            const operacionFilters = Array.from(document.querySelectorAll('#operacion-container input:checked')).map(cb => cb.value.toLowerCase());
+            if (operacionFilters.length > 0) filters.tipo_operacion = operacionFilters[0];
+            
+            // Tipo
+            const tipoFilters = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
+            if (tipoFilters.length > 0) filters.tipo_propiedad = tipoFilters[0];
+            
+            // Ciudad
+            const ciudadFilters = Array.from(document.querySelectorAll('#ciudad-container input:checked')).map(cb => cb.value.toLowerCase());
+            if (ciudadFilters.length > 0) filters.city = ciudadFilters[0];
+            
+            // Ordenamiento
+            const sort = document.getElementById('sort-select').value;
+            if (sort) filters.orden = sort;
+            
+            // Recámaras
+            const recamarasFilters = Array.from(document.querySelectorAll('#recamaras-container input:checked')).map(cb => cb.value);
+            if (recamarasFilters.length > 0) filters.recamaras = recamarasFilters[0];
+
+            // Seguridad
+            const seguridadFilters = Array.from(document.querySelectorAll('#seguridad-container input:checked')).map(cb => cb.value);
+            if (seguridadFilters.length > 0) {
+                seguridadFilters.forEach(f => {
+                    switch(f) {
+                        case 'caseta': filters.caseta_vigilancia = true; break;
+                        case 'camaras': filters.camaras_seguridad = true; break;
+                        case '24h': filters.vigilancia_24h = true; break;
+                        case 'acceso_controlado': filters.acceso_controlado = true; break;
+                    }
+                });
+            }
+
+            return filters;
+        }
+
+        // APLICAR FILTROS
+        function applyFilters() {
+            showLoading();
+            // Detectar filtros que requieren dataset completo
+            const advCaracteristicas = Array.from(document.querySelectorAll('#caracteristicas-container input:checked')).map(cb => cb.value);
+            const advSeguridad      = Array.from(document.querySelectorAll('#seguridad-container input:checked')).map(cb => cb.value);
+            const advNiveles        = Array.from(document.querySelectorAll('#niveles-container input:checked')).map(cb => cb.value);
+            const advRecPb         = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb => cb.value);
+            const advLegal          = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb => cb.value);
+
+            const needsLocal = advCaracteristicas.length > 0 || advSeguridad.length > 0 || advNiveles.length > 0 || advRecPb.length > 0 || advLegal.length > 0;
+
+            // Si estamos usando paginación parcial y el usuario selecciona filtros que sólo funcionan localmente,
+            // cambiamos automáticamente el límite a 6160 (todas las propiedades) y reintentar después de la carga.
+            if (currentLimit !== 6160 && needsLocal) {
+                pendingApply = true;
+                showLoading();
+                changePaginationLimit(6160);
+                return; // applyFilters se reintentará tras carga completa
+            }
+
+            // Para los casos restantes podemos apoyarnos en la API cuando no sea necesario filtrado local complejo
+            if (currentLimit !== 6160) {
+                currentFilters = buildApiFilters();
+                loadProperties(1, currentLimit, currentFilters);
+                return;
+            }
+            
+            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+            const priceMin = parseFloat(document.getElementById('price-min').value) || 0;
+            const priceMax = parseFloat(document.getElementById('price-max').value) || Infinity;
+            
+            // Bandera para saber si hay algún filtro activo
+            const anyFilterActive = !!searchTerm || priceMin > 0 || priceMax < Infinity;
+            
+            // Obtener filtros de checkboxes
+            const operacionFilters = Array.from(document.querySelectorAll('#operacion-container input:checked')).map(cb => cb.value.toLowerCase());
+            const tipoFilters = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
+            const ciudadFilters = Array.from(document.querySelectorAll('#ciudad-container input:checked')).map(cb => cb.value.toLowerCase());
+            const recamarasFilters = Array.from(document.querySelectorAll('#recamaras-container input:checked')).map(cb => cb.value);
+            const caracteristicasFilters = Array.from(document.querySelectorAll('#caracteristicas-container input:checked')).map(cb => cb.value);
+            const seguridadFilters = Array.from(document.querySelectorAll('#seguridad-container input:checked')).map(cb => cb.value);
+            const nivelesFilters = Array.from(document.querySelectorAll('#niveles-container input:checked')).map(cb => cb.value);
+            const recamaraPbFilters = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb => cb.value);
+            const legalFilters = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb => cb.value);
+            
+            filteredProperties = allProperties.filter(property => {
+                // Normalizar campos claves
+                const tipoOperacion = (property.tipo_operacion || property.operation_type || '').toString().toLowerCase();
+                const tipoPropiedad = (property.tipo_propiedad || property.property_type || '').toString().toLowerCase();
+                const ciudadProp   = (property.ciudad || property.city || '').toString().toLowerCase();
+                const nivelesPropRaw  = property.niveles || property.levels || 0;
+                const nivelesProp = Number(nivelesPropRaw) || 0;
+                const recamarasVal = property.recamaras || property.bedrooms || 0;
+                const banosVal     = property.banos || property.bathrooms || 0;
+                const estacionaVal = property.estacionamientos || property.parking || 0;
+
+                // Strings compuestos para búsqueda y filtros de texto
+                const amenidadesStr = typeof property.amenidades === 'string' ? property.amenidades : JSON.stringify(property.amenidades||'');
+                const legalStr      = typeof property.legal === 'string' ? property.legal : JSON.stringify(property.legal||'');
+
+                // Búsqueda global en múltiples campos
+                if (searchTerm) {
+                    const searchableContent = [
+                        property.id?.toString() || '',
+                        property.titulo || '',
+                        property.descripcion || '',
+                        ciudadProp,
+                        property.estado || '',
+                        property.colonia || '',
+                        property.direccion_completa || '',
+                        (property.precio || '').toString(),
+                        (property.precio_numerico || '').toString(),
+                        recamarasVal.toString(),
+                        banosVal.toString(),
+                        estacionaVal.toString(),
+                        amenidadesStr,
+                        legalStr
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableContent.includes(searchTerm)) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de precio
+                const propertyPrice = property.precio_numerico || property.price_numeric || 0;
+                if (propertyPrice < priceMin || propertyPrice > priceMax) {
+                    return false;
+                }
+                
+                // Filtros de checkboxes
+                if (operacionFilters.length > 0 && !operacionFilters.includes(tipoOperacion)) {
+                    return false;
+                }
+                
+                if (tipoFilters.length > 0 && !tipoFilters.includes(tipoPropiedad)) {
+                    return false;
+                }
+                
+                if (ciudadFilters.length > 0) {
+                    const cityDb = (property.ciudad || '').toLowerCase();
+                    const cityAddr = (property.direccion_completa || property.location || '').split(',')[0].trim().toLowerCase();
+                    const matchesCity = ciudadFilters.includes(cityDb) || ciudadFilters.includes(cityAddr);
+                    if (!matchesCity) {
+                        return false;
+                    }
+                }
+                
+                if (recamarasFilters.length > 0) {
+                    const recamaras = recamarasVal;
+                    const matchesRecamaras = recamarasFilters.some(filter => {
+                        if (filter === '4+') return recamaras >= 4;
+                        return recamaras === parseInt(filter);
+                    });
+                    if (!matchesRecamaras) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de características (acepta amenidades como array)
+                if (caracteristicasFilters.length > 0) {
+                    const desc = (property.descripcion || property.description || '').toLowerCase();
+                    const caracTexto = (property.caracteristicas || property.features || '').toString().toLowerCase();
+
+                    let amenidadesFlat = '';
+                    const amenidadesArr = property.amenidades || property.amenities || [];
+                    if (Array.isArray(amenidadesArr)) {
+                        amenidadesFlat = amenidadesArr.join(' ').toLowerCase();
+                    } else {
+                        amenidadesFlat = (amenidadesArr || '').toString().toLowerCase();
+                    }
+
+                    const matchesCarac = caracteristicasFilters.every(filter => {
+                        const palabras = CARAC_SYNONYMS[filter] || [filter];
+                        return palabras.some(w => desc.includes(w) || amenidadesFlat.includes(w) || caracTexto.includes(w));
+                    });
+
+                    if (!matchesCarac) return false;
+                }
+
+                // Filtro de seguridad con fallback textual
+                if (seguridadFilters.length > 0) {
+                    const tieneBool = ['caseta_vigilancia','camaras_seguridad','vigilancia_24h','acceso_controlado']
+                        .some(k => typeof property[k] !== 'undefined');
+
+                    const matchesSeguridad = seguridadFilters.some(filter => {
+                        switch(filter) {
+                            case 'caseta': {
+                                const v = property.caseta_vigilancia;
+                                return v === true || v === 1 || v === '1' || v === 'true';
+                            }
+                            case 'camaras': {
+                                const v = property.camaras_seguridad;
+                                return v === true || v === 1 || v === '1' || v === 'true';
+                            }
+                            case '24h': {
+                                const v = property.vigilancia_24h;
+                                return v === true || v === 1 || v === '1' || v === 'true';
+                            }
+                            case 'acceso_controlado': {
+                                const v = property.acceso_controlado;
+                                return v === true || v === 1 || v === '1' || v === 'true';
+                            }
+                            default:
+                                return false;
+                        }
+                    });
+
+                    if (!matchesSeguridad) {
+                        // Fallback búsqueda textual SIEMPRE (independiente de campos booleanos)
+                        const textoSeg = (property.descripcion || '').toLowerCase();
+                        const fallbackOk = seguridadFilters.every(f => {
+                            const palabras = SEGURIDAD_SYNONYMS[f] || [f];
+                            return palabras.some(w => textoSeg.includes(w));
+                        });
+                        if (!fallbackOk) return false;
+                    }
+                }
+            
+                // Filtro de niveles
+                if (nivelesFilters.length > 0) {
+                    const niveles = nivelesProp;
+                    
+                    const matchesNiveles = nivelesFilters.some(filter => {
+                        switch(filter) {
+                            case 'un_nivel': return niveles === 1 && ((property.tipo_propiedad || property.property_type || '').toLowerCase() !== 'departamento' && (property.tipo_propiedad || property.property_type || '').toLowerCase() !== 'apartment');
+                            case 'dos_niveles': return niveles === 2;
+                            case 'tres_niveles': return niveles >= 3;
+                            default: return false;
+                        }
+                    });
+                    
+                    if (!matchesNiveles) {
+                        return false;
+                    }
+                }
+                
+                // Filtro de recámara en planta baja
+                if (recamaraPbFilters.length > 0) {
+                    const recPbRaw = property.recamara_planta_baja ?? property.recamara_pb ?? property.bedroom_groundfloor;
+                    let recPbBool;
+                    if (recPbRaw === true || recPbRaw === "true" || recPbRaw === 1 || recPbRaw === "1" || recPbRaw === "si") {
+                        recPbBool = true;
+                    } else if (recPbRaw === false || recPbRaw === "false" || recPbRaw === 0 || recPbRaw === "0" || recPbRaw === "no") {
+                        recPbBool = false;
+                    } else {
+                        // Fallback: búsqueda textual inteligente
+                        const descLow = (property.descripcion || '').toLowerCase();
+
+                        // Patrones:
+                        //  1) "recámara (en)? planta baja|pb"  (recámara en planta baja)
+                        //  2) "planta baja ... recámara" o "pb ... recámara"
+                        const regexPositivo = /(rec[aá]?mara|habitaci[oó]n|hab)\s*(en)?\s*(pb|planta baja)|\b(pb|planta baja)\b.{0,40}?(rec[aá]?mara|habitaci[oó]n|hab)/i;
+                        const regexNegativo = /(sin|no|ninguna|ning[úu]n|ningun).{0,20}?(rec[aá]?mara|habitaci[oó]n|hab)/i;
+
+                        if (regexPositivo.test(descLow) && !regexNegativo.test(descLow)) {
+                            recPbBool = true;
+                        } else if (regexNegativo.test(descLow)) {
+                            recPbBool = false;
+                        }
+                    }
+                    const matchesRecPb = recamaraPbFilters.some(f => {
+                        if (f === 'si') return recPbBool === true;
+                        if (f === 'no') return recPbBool === false;
+                        return false;
+                    });
+                    if (!matchesRecPb) return false;
+                }
+                
+                // Filtro legal
+                if (legalFilters.length > 0) {
+                    const descripcion = (property.descripcion || '').toLowerCase();
+                    const legal = legalStr.toLowerCase();
+                    
+                    const matchesLegal = legalFilters.some(filter => {
+                        switch(filter) {
+                            case 'escrituras': return legal.includes('escritura') || descripcion.includes('escritura');
+                            case 'cesion': return legal.includes('cesión') || descripcion.includes('cesión') || descripcion.includes('cesion');
+                            case 'credito': return descripcion.includes('crédito') || descripcion.includes('credito') || descripcion.includes('infonavit');
+                            default: return false;
+                        }
+                    });
+                    
+                    if (!matchesLegal) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+            
+            // Si no hay filtros activos y sin término de búsqueda, restaurar listado completo
+            if (!anyFilterActive && operacionFilters.length===0 && tipoFilters.length===0 && ciudadFilters.length===0 && recamarasFilters.length===0 && caracteristicasFilters.length===0 && seguridadFilters.length===0 && nivelesFilters.length===0 && recamaraPbFilters.length===0 && legalFilters.length===0){
+                filteredProperties = allProperties;
+            }
+
+            // Aplicar ordenamiento seleccionado
+            sortFilteredProperties();
+            
+            renderProperties();
+            updatePropertiesCount(filteredProperties.length);
+            hideLoading();
+        }
+
+        // OBTENER VALORES MARCADOS
+        function getCheckedValues(selector) {
+            const checkboxes = document.querySelectorAll(selector + ':checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        // LIMPIAR FILTROS
+        function clearAllFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('price-min').value = '';
+            document.getElementById('price-max').value = '';
+            document.getElementById('sort-select').value = '';
+            
+            // Limpiar todos los checkboxes de todos los filtros
+            const checkboxGroups = [
+                '#operacion-container input[type="checkbox"]',
+                '#tipo-container input[type="checkbox"]',
+                '#ciudad-container input[type="checkbox"]',
+                '#recamaras-container input[type="checkbox"]',
+                '#caracteristicas-container input[type="checkbox"]',
+                '#seguridad-container input[type="checkbox"]',
+                '#niveles-container input[type="checkbox"]',
+                '#recamara-pb-container input[type="checkbox"]',
+                '#legal-container input[type="checkbox"]'
+            ];
+            
+            checkboxGroups.forEach(selector => {
+                document.querySelectorAll(selector).forEach(cb => {
+                    cb.checked = false;
+                });
+            });
+            
+            if (currentLimit !== 6160) {
+                currentFilters = {};
+                loadProperties(1, currentLimit, {});
+            } else {
+                applyFilters();
+            }
+        }
+
+        // RENDERIZAR PROPIEDADES
+        function renderProperties() {
+            const container = document.getElementById('properties-container');
+            
+            if (filteredProperties.length === 0) {
+                container.innerHTML = `
+                    <div class="no-results">
+                        <h3>No se encontraron propiedades</h3>
+                        <p>Intenta ajustar tus filtros de búsqueda.</p>
+                </div>
+            `;
+                return;
+            }
+            
+            const visibles = filteredProperties.filter(p => {
+                const link = (p.url_original || p.facebook_url || '').toString();
+                return link && !link.includes('unavailable_product'); // descarta publicaciones caídas
+            });
+
+            container.innerHTML = visibles.map(property => createPropertyCard(property)).join('');
+        }
+
+                  // CREAR TARJETA DE PROPIEDAD - v3.2.0 MAPEO INTELIGENTE S3
+          function createPropertyCard(property) {
+              // ─── MAPEO FLEXIBLE DE CAMPOS API/LAMBDA ─────────────────────
+              // Imagen: priorizar array images (nuevo backend) luego campos antiguos
+              // Obtención robusta de la imagen ─ compatible con versiones anteriores
+              const originalUrl =
+                    (property.images && property.images.length ? property.images[0] : '') || // nuevo backend
+                    (property.imagenes && property.imagenes.length ? property.imagenes[0] : '') || // backend intermedio
+                    property.image ||
+                    property.imagen_principal ||
+                    (property.imagen_portada && typeof property.imagen_portada === 'object' ? property.imagen_portada.ruta_relativa : property.imagen_portada) ||
+                    (property.imagen && typeof property.imagen === 'object' ? (property.imagen.ruta_relativa || property.imagen.nombre) : property.imagen) ||
+                    (property.archivos && property.archivos.imagen) ||
+                    '';
+
+              // Construir URL final: si es relativa, anteponer bucket S3; si está vacía usar placeholder
+              let imageUrl;
+              if (originalUrl && originalUrl.includes('http')) {
+                  imageUrl = originalUrl;
+              } else if (originalUrl) {
+                  imageUrl = `https://todaslascasas-imagenes.s3.amazonaws.com/${originalUrl.replace(/^\/+/, '')}`;
+              } else {
+                  imageUrl = 'https://todaslascasas-imagenes.s3.amazonaws.com/Imagen_no_disponible.jpg';
+              }
+ 
+              // Precio: mostrar "Gratis" si valor == 0 o texto incluye gratis
+              let priceTxt = property.price || property.precio || '';
+              if (typeof priceTxt === 'string' && priceTxt.toLowerCase().includes('gratis')) {
+                  priceTxt = 'Gratis';
+              } else if (typeof priceTxt === 'number' && priceTxt === 0) {
+                  priceTxt = 'Gratis';
+              } else if (!priceTxt && property.price_numeric === 0) {
+                  priceTxt = 'Gratis';
+              } else if (!priceTxt && property.price_numeric) {
+                  priceTxt = `$${property.price_numeric.toLocaleString('es-MX')}`;
+              } else if (!priceTxt) {
+                  priceTxt = 'Precio no disponible';
+              }
+
+              // Título
+              const tipoProp = property.tipo_propiedad || property.property_type || '';
+              const ciudadDb   = property.ciudad || property.city || '';
+              const estado   = property.estado || property.state || '';
+
+              // Extraer posible ciudad del primer segmento de la dirección completa
+              let ciudadAddr = '';
+              if (property.direccion_completa) {
+                  ciudadAddr = property.direccion_completa.split(',')[0].trim();
+              } else if (property.location) {
+                  ciudadAddr = property.location.split(',')[0].trim();
+              }
+
+              let ciudadTitulo = ciudadDb;
+              if (ciudadAddr && ciudadAddr.length > 2) {
+                  if (!ciudadDb || ciudadAddr.toLowerCase() !== ciudadDb.toLowerCase()) {
+                      ciudadTitulo = ciudadAddr;
+                  }
+              }
+
+              const rawTitle = (tipoProp && ciudadTitulo)
+                  ? `${tipoProp} en ${ciudadTitulo}`
+                  : property.titulo || property.title || 'Sin título';
+              const title = toTitleCase(rawTitle);
+
+              // Ubicación
+              const location = `${ciudadDb}, ${estado}`.trim().replace(/^,|,$/, '');
+              // Determinar dirección preferida
+              let addressRaw = property.direccion_completa || property.location || location;
+              // Limpiar dirección: tomar hasta primer salto de línea o símbolo '·'
+              let address = addressRaw.split(/\n|·/)[0].trim();
+              // Quitar prefijo 'Ubicación' opcional
+              address = address.replace(/^Ubicación[:]?\s*/i, '').trim();
+              // Si quedó muy corta, conservar la original
+              if (address.length < 3) address = location;
+              const description = property.descripcion || property.description || 'Sin descripción disponible';
+              const originalUrlLink = property.url_original || property.facebook_url || '#';
+              const propertyId_display = property.id || 'Sin ID';
+              
+              const tipoOperacion = (property.tipo_operacion || property.operation_type || '').toLowerCase();
+
+              return `
+                  <div class="property-card" data-property-id="${property.id}">
+                      <a href="${originalUrlLink}" target="_blank" style="text-decoration: none; color: inherit;">
+                          <div class="property-image" style="background-image: url('${imageUrl}'); background-size: cover; background-position: center;">
+                              <div class="property-label ${tipoOperacion === 'renta' ? 'renta' : 'venta'}">${tipoOperacion}</div>
+                          </div>
+                      </a>
+                      
+                      <div class="property-content">
+                          <div class="property-id">ID: ${propertyId_display}</div>
+                          <a href="${originalUrlLink}" target="_blank" style="text-decoration: none; color: inherit;">
+                              <h3 class="property-title">${title}</h3>
+                          </a>
+                          <div class="property-price">${priceTxt}</div>
+                          <div class="property-location">📍 ${address}</div>
+                          
+                          <div class="property-features">
+                              ${ (property.recamaras || property.bedrooms) ? `<span class="feature">🛏️ ${property.recamaras || property.bedrooms} rec</span>` : ''}
+                              ${ (property.banos || property.bathrooms) ? `<span class="feature">🚿 ${property.banos || property.bathrooms} baños</span>` : ''}
+                              ${ (property.superficie_m2 || property.surface_m2) ? `<span class="feature">📐 ${property.superficie_m2 || property.surface_m2}m²</span>` : ''}
+                          </div>
+                          
+                          <div class="description-container">
+                              <button class="description-toggle" onclick="toggleDescription(this)">
+                                  <span>Ver descripción completa</span>
+                              </button>
+                              <div class="description-content">
+                                  ${description}
+                              </div>
+                          </div>
+                          
+                          <div class="property-actions">
+                              <button class="btn-favorite" onclick="toggleFavorite('${property.id}')" style="font-size:1.3rem;color:${favoritesSet.has(property.id)?'#facc15':'#d1d5db'}">
+                                  ⭐
+                              </button>
+                              ${isAdmin ? `<button class="btn-delete" onclick="deleteProperty('${property.id}')" style="font-size:1.2rem;color:#ef4444;margin-left:4px;" title="Borrar publicación">🗑️</button>` : ''}
+                          </div>
+                      </div>
+                  </div>
+              `;
+          }
+        
+        // VER PROPIEDAD
+        function viewProperty(url) {
+            if (url && url !== 'undefined') {
+                window.open(url, '_blank');
+                } else {
+                alert('URL no disponible para esta propiedad');
+            }
+        }
+
+        // TOGGLE FAVORITO
+        async function toggleFavorite(propertyId) {
+            const isFav = favoritesSet.has(propertyId);
+            if(isFav){
+                try{
+                    const resp = await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE',credentials:'include'});
+                    if(resp.ok){
+                        favoritesSet.delete(propertyId);
+                        // quitar de todas las carpetas locales
+                        for(const f in favorites){favorites[f]=favorites[f].filter(id=>id!==propertyId);} 
+                        localStorage.setItem('favorites', JSON.stringify(favorites));
+                        renderProperties();
+                    }
+                }catch(e){console.error('Favorite delete error',e);} 
+            } else {
+                currentPropertyToSave = propertyId;
+                populateFolderSelect();
+                document.getElementById('selectFolderModal').classList.add('show');
+            }
+        }
+
+        function populateFolderSelect(){
+            const select=document.getElementById('folderSelect');
+            select.innerHTML = favoriteFolders.map(f=>`<option value="${f}">${f}</option>`).join('') + '<option value="__new__">Crear nueva carpeta</option>';
+            document.getElementById('newFolderInput').style.display='none';
+        }
+
+        function handleFolderSelectChange(val){
+            const input=document.getElementById('newFolderInput');
+            input.style.display = (val==='__new__')?'block':'none';
+        }
+
+        async function saveFavoriteToSelectedFolder(){
+            let sel=document.getElementById('folderSelect').value;
+            if(sel==='__new__'){
+                const newName=document.getElementById('newFolderInput').value.trim();
+                if(!newName){alert('Escribe un nombre para la nueva carpeta');return;}
+                sel=newName;
+                if(!favoriteFolders.includes(sel)){favoriteFolders.push(sel);} 
+            }
+            if(!favorites[sel]) favorites[sel]=[];
+            if(!favorites[sel].includes(currentPropertyToSave)) favorites[sel].push(currentPropertyToSave);
+            localStorage.setItem('favoriteFolders', JSON.stringify(favoriteFolders));
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+
+            try{
+                const resp=await fetch(`${API_BASE_URL}/api/favorites`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({property_id:currentPropertyToSave})});
+                if(resp.ok){
+                    favoritesSet.add(currentPropertyToSave);
+                    closeModal('selectFolderModal');
+                    renderProperties();
+                }
+            }catch(e){console.error('Add favorite error',e);} 
+        }
+
+        function showFavorites(){
+            const modal=document.getElementById('favoritesModal');
+            const content=document.getElementById('favoritesContent');
+            if(favoriteFolders.length===0){content.innerHTML='<p>No tienes favoritos guardados.</p>';} else {
+                let tabs='<div class="folder-tabs" style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">';
+                favoriteFolders.forEach(f=>{const activeClass=f===currentFavoritesFolder?'active-tab':'';tabs+=`<button class="${activeClass}" data-folder="${f}" onclick="switchFavoriteFolder('${f}')">${f} (${(favorites[f]||[]).length})</button>`;});
+                tabs+=`<button class="btn-remove" style="margin-left:auto;" onclick="deleteCurrentFolder()">🗑️ Borrar carpeta</button>`;
+                tabs+='</div><div id="favoritesList"></div>';
+                content.innerHTML=tabs;
+                currentFavoritesFolder=favoriteFolders[0];
+                renderFavoritesList();
+            }
+            modal.classList.add('show');
+        }
+
+        function switchFavoriteFolder(folder){currentFavoritesFolder=folder;renderFavoritesList();updateFolderTabStyles();}
+
+        function updateFolderTabStyles(){
+            document.querySelectorAll('.folder-tabs button[data-folder]').forEach(btn=>{
+                if(btn.dataset.folder===currentFavoritesFolder){btn.classList.add('active-tab');}else{btn.classList.remove('active-tab');}
+            });
+        }
+
+        function renderFavoritesList(){
+            const list=document.getElementById('favoritesList');
+            if(!list) return;
+            const items=favorites[currentFavoritesFolder]||[];
+            if(items.length===0){list.innerHTML='<p>Sin favoritos en esta carpeta.</p>';return;}
+            const cards=items.map(id=>{
+                const prop=allProperties.find(p=>p.id===id)||{};
+                const img=(prop.imagen_url|| (Array.isArray(prop.imagenes)&&prop.imagenes.length?prop.imagenes[0]:null)) || 'https://todaslascasas-imagenes.s3.amazonaws.com/Imagen_no_disponible.jpg';
+                const titulo=`${prop.tipo_propiedad||'Propiedad'} – ${prop.ciudad||''}`;
+                const ciudad=prop.ciudad||'';
+                let precio=prop.precio||'';
+                if(precio && !precio.trim().startsWith('$')) precio=`$${precio}`;
+                const url=prop.url_original||'#';
+                return `<div class="favorite-h-card"><a href="${url}" target="_blank"><img src="${img}" alt="thumb"></a><div class="fh-info"><h4><a href="${url}" target="_blank" style="text-decoration:none;color:#111827;">${titulo}</a></h4><p>${ciudad}</p><p class="fh-price">${precio}</p><div class="fh-actions"><button class="btn btn-secondary" onclick="viewProperty('${url}')">Abrir ficha</button><button class="btn-remove" onclick="removeFavorite('${id}','${currentFavoritesFolder}')">Eliminar ✖</button></div></div></div>`;
+            }).join('');
+            list.innerHTML=cards;
+        }
+
+        async function removeFavorite(propertyId, folder){
+            favorites[folder]= (favorites[folder]||[]).filter(id=>id!==propertyId);
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+            favoritesSet.delete(propertyId);
+            await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE', credentials:'include'}).catch(console.error);
+            renderFavoritesList();
+            renderProperties();
+        }
+
+        // CAMBIAR VISTA GRID - FORZADO A 4 COLUMNAS
+        function setGridView(columns) {
+            const container = document.getElementById('properties-container');
+            const buttons = document.querySelectorAll('.view-btn');
+            
+            console.log(`🔄 setGridView llamado con ${columns} columnas`);
+            
+            // FORZAR SIEMPRE 4 COLUMNAS
+            // columns = 4; // Eliminado forzado de columnas
+            
+            buttons.forEach(btn => btn.classList.remove('active'));
+            
+            // Marcar botón 4 Col como activo
+            const button4 = document.querySelector('[onclick="setGridView(4)"]');
+            if (button4) {
+                button4.classList.add('active');
+            }
+            
+            // Remover clases anteriores
+            container.classList.remove('list-view');
+            
+            // SIEMPRE 4 COLUMNAS
+            // container.style.gridTemplateColumns = 'repeat(4, 1fr)'; // Eliminado forzado de columnas
+            
+            console.log(`✅ Grid FORZADO a 4 columnas`);
+        }
+
+        // ORDENAR PROPIEDADES
+        function sortFilteredProperties(){
+            const sortVal = document.getElementById('sort-select').value;
+            if(!sortVal || filteredProperties.length===0) return;
+            if(sortVal === 'precio_asc'){
+                filteredProperties.sort((a,b)=>(a.precio_numerico||0)-(b.precio_numerico||0));
+            } else if(sortVal === 'precio_desc'){
+                filteredProperties.sort((a,b)=>(b.precio_numerico||0)-(a.precio_numerico||0));
+            } else if(sortVal === 'fecha_desc'){
+                const getDate = p => new Date(p.fecha_publicacion || p.fecha || p.created_at || 0);
+                filteredProperties.sort((a,b)=>(getDate(b)-getDate(a)));
+            }
+        }
+
+        function sortProperties(){
+            const limitAll = currentLimit === 6160;
+            if(limitAll){
+                sortFilteredProperties();
+                renderProperties();
+            }else{
+                // Vía API: refrescar datos con nuevo orden
+                currentFilters = buildApiFilters();
+                loadProperties(1, currentLimit, currentFilters);
+            }
+        }
+
+        // RENDERIZAR PAGINACIÓN
+        function renderPagination(total, count, currentPage) {
+            const container = document.getElementById('pagination');
+            const totalPages = Math.ceil(total / 21);
+            
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Botón anterior
+            html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="loadProperties(${currentPage - 1})">‹ Anterior</button>`;
+            
+            // Páginas
+            for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+                const page = currentPage <= 3 ? i : currentPage - 3 + i;
+                if (page <= totalPages) {
+                    html += `<button class="${page === currentPage ? 'active' : ''}" onclick="loadProperties(${page})">${page}</button>`;
+                }
+            }
+            
+            // Botón siguiente
+            html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="loadProperties(${currentPage + 1})">Siguiente ›</button>`;
+            
+            container.innerHTML = html;
+        }
+
+        // ACTUALIZAR CONTADOR
+        function updatePropertiesCount(total) {
+            document.getElementById('properties-count').textContent = `${total} propiedades encontradas`;
+        }
+
+        // MOSTRAR LOADING
+        function showLoading() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        // MOSTRAR ERROR
+        function showError(message) {
+            document.getElementById('properties-container').innerHTML = `
+                <div class="no-results">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                    </div>
+                `;
+        }
+
+        // UTILIDADES
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // CARGAR TODAS LAS PROPIEDADES SIN LÍMITE (batch de 500)
+        async function loadAllProperties() {
+            try {
+                showLoading();
+                allProperties = [];
+                filteredProperties = [];
+                const batchSize = 500;
+                let page = 1;
+                let totalExpected = 0;
+                while (true) {
+                    console.log(`🌐 Solicitud API – página ${page}, batch ${batchSize}`);
+                    const resp = await fetch(`${API_BASE_URL}/propiedades?limit=${batchSize}&page=${page}`);
+                    if (!resp.ok) {
+                        throw new Error(`HTTP ${resp.status}`);
+                    }
+                    const data = await resp.json();
+                    if (page === 1) {
+                        totalExpected = data.total || 0;
+                    }
+                    const props = (data.propiedades || []).map(normalizeProperty);
+                    allProperties = allProperties.concat(props);
+                    if (allProperties.length >= totalExpected || props.length === 0) {
+                        break;
+                    }
+                    page += 1;
+                }
+                filteredProperties = [...allProperties];
+                console.log(`✅ Cargadas ${allProperties.length}/${totalExpected} propiedades (completo)`);
+                renderProperties();
+                updatePropertiesCount(allProperties.length);
+                hideLoading();
+                // Reaplicar filtros avanzados si el usuario los tenía activos
+                applyFilters();
+            } catch (err) {
+                console.error('❌ Error cargando todas las propiedades:', err);
+                showError('Error al cargar propiedades: ' + err.message);
+            }
+        }
+
+        // FUNCIÓN PARA CAMBIAR LÍMITE DE CARGA
+        function changePaginationLimit(newLimit) {
+            currentLimit = newLimit;
+            allProperties = [];
+            filteredProperties = [];
+            currentPage = 1;
+
+            console.log(`📄 Cambiando paginación a: ${newLimit === 6160 ? 'TODAS' : newLimit} propiedades`);
+
+            if (newLimit === 6160) {
+                // Cargar todas las propiedades en lotes
+                loadAllProperties();
+            } else {
+                loadProperties(1, newLimit);
+            }
+        }
+
+        // FUNCIONES DE MODAL
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        function showLeads() {
+            document.getElementById('leadsModal').classList.add('show');
+        }
+
+        function showRavelLeads() {
+            alert('Función Ravel Leads en desarrollo');
+        }
+
+        function showAdminModal() {
+            alert('Panel de administración en desarrollo');
+        }
+
+        function logout() {
+            // Elimina datos locales
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('userData');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userEmail');
+
+            // Limpia UI inmediatamente
+            document.getElementById('userName').textContent = '';
+            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('googleLoginBtn').style.display = 'inline-block';
+
+            // Redirige al backend para borrar cookie
+            window.location.href = `${API_BASE_URL}/auth/google/logout?next=/`;
+        }
+
+        // Click fuera del modal para cerrar
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('show');
+            }
+        }
+
+        // ─── NORMALIZAR PROPIEDAD ────────────────────────────────────────────────
+        function normalizeProperty(p) {
+            return {
+                ...p,
+                tipo_operacion  : p.tipo_operacion  || p.operation_type || '',
+                tipo_propiedad  : p.tipo_propiedad  || p.property_type  || '',
+                ciudad          : p.ciudad          || p.city           || '',
+                niveles         : (typeof p.niveles === 'string' ? parseInt(p.niveles) : p.niveles) || (typeof p.levels === 'string' ? parseInt(p.levels) : p.levels) || 0,
+                recamaras       : p.recamaras ?? p.bedrooms        ?? 0,
+                banos           : p.banos     ?? p.bathrooms       ?? 0,
+                estacionamientos: p.estacionamientos ?? p.parking   ?? 0,
+                precio_numerico : p.precio_numerico ?? p.price_numeric ?? 0,
+                amenidades      : p.amenidades ?? p.features ?? '',
+                legal           : p.legal ?? p.legal_status ?? ''
+            };
+        }
+
+        // Exponer filtros en window para depuración
+        window.applyFilters = applyFilters;
+
+        // ─── UTILIDAD: Pasar a Title Case ─────────────────────────────
+        function toTitleCase(str) {
+            return str.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+        }
+
+        // ─── SINÓNIMOS DE FILTROS ─────────────────────────────
+        // (bloque duplicado movido arriba)
+
+        // Verificar sesión y mostrar nombre de usuario
+        async function checkAuth(){
+            try{
+                const resp = await fetch(`${API_BASE_URL}/auth/me`, {credentials:'include'});
+                if(resp.ok){
+                    const data = await resp.json();
+                    document.getElementById('userName').textContent = data.name || data.email || 'Usuario';
+                    document.getElementById('userInfo').classList.add('show');
+                    document.getElementById('googleLoginBtn').style.display = 'none';
+                    await loadFavorites();
+                    isAdmin = (data.email||'').endsWith('@todaslascasas.mx') || (data.email||'')==='pabloravel@gmail.com';
+                    if(allProperties.length>0){renderProperties();}
+                }
+            }catch(e){
+                console.warn('No authenticated user', e);
+            }
+        }
+
+        async function loadFavorites(){
+            try{
+                const resp = await fetch(`${API_BASE_URL}/api/favorites`, {credentials:'include'});
+                if(resp.ok){
+                    const data = await resp.json();
+                    favoritesSet = new Set(data.favorites||[]);
+                    // Sincronizar con carpetas locales
+                    (data.favorites||[]).forEach(id=>{
+                        if(!Object.values(favorites).some(arr=>arr.includes(id))){
+                            if(!favorites['General']) favorites['General']=[];
+                            favorites['General'].push(id);
+                        }
+                    });
+                    localStorage.setItem('favorites', JSON.stringify(favorites));
+                    localStorage.setItem('favoriteFolders', JSON.stringify(favoriteFolders));
+                }
+            }catch(e){console.warn('No favorites',e);}  
+         }
+
+        // ─── BORRAR CARPETA ────────────────────────────
+        function deleteCurrentFolder(){
+            if(currentFavoritesFolder==='General'){alert('La carpeta General no se puede borrar');return;}
+            if(!confirm(`¿Eliminar la carpeta "${currentFavoritesFolder}" y sus favoritos?`)) return;
+            // eliminar carpeta
+            delete favorites[currentFavoritesFolder];
+            favoriteFolders = favoriteFolders.filter(f=>f!==currentFavoritesFolder);
+            localStorage.setItem('favoriteFolders', JSON.stringify(favoriteFolders));
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+            // Si la carpeta eliminada estaba activa, mostrar General
+            currentFavoritesFolder = favoriteFolders[0]||'General';
+            showFavorites();
+        }
+
+        async function deleteProperty(id){
+            if(!isAdmin){alert('Acceso restringido');return;}
+            if(!confirm('¿Eliminar la publicación '+id+' de forma permanente?')) return;
+            try{
+                const resp = await fetch(`${API_BASE_URL}/api/properties/${id}`, {method:'DELETE', credentials:'include'});
+                if(resp.ok){
+                    // quitar de arrays locales
+                    allProperties = allProperties.filter(p=>p.id!==id);
+                    filteredProperties = filteredProperties.filter(p=>p.id!==id);
+                    favoritesSet.delete(id);
+                    for(const f in favorites){favorites[f]=favorites[f].filter(x=>x!==id);} 
+                    renderProperties();
+                    alert('Propiedad eliminada');
+                } else {
+                    const data = await resp.json();
+                    alert('Error:'+data.error);
+                }
+            }catch(e){alert('Error:'+e);} 
+        }
+    </script>
+</body>
+</html> 
+</html> 

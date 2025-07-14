@@ -1,0 +1,529 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+normalizador.py
+
+Módulo para normalizar y estandarizar los datos de propiedades inmobiliarias.
+Implementa un esquema de datos estricto y funciones de normalización mejoradas.
+"""
+
+import json
+import logging
+import re
+from typing import Dict, List, Optional, Union, Any
+from datetime import datetime
+from decimal import Decimal
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Esquema de datos estandarizado
+ESQUEMA_PROPIEDAD = {
+    "id": str,                    # Identificador único
+    "fecha_publicacion": str,     # Fecha de publicación
+    "tipo_operacion": str,        # Venta/Renta
+    "tipo_propiedad": str,        # Casa/Departamento/Terreno
+    "precio": {
+        "valor": float,           # Valor numérico
+        "moneda": str,            # MXN
+        "periodo": str            # Mensual/Total
+    },
+    "ubicacion": {
+        "ciudad": str,            # Ciudad
+        "colonia": str,           # Colonia
+        "direccion": str,         # Dirección completa
+        "coordenadas": {          # Coordenadas geográficas
+            "lat": float,
+            "lng": float
+        }
+    },
+    "caracteristicas": {
+        "recamaras": int,         # Número de recámaras
+        "banos": float,           # Número de baños (puede ser decimal)
+        "estacionamientos": int,  # Número de estacionamientos
+        "niveles": int,           # Número de niveles
+        "superficie_construida": float,  # m2 de construcción
+        "superficie_terreno": float,     # m2 de terreno
+        "antiguedad": int         # Años de antigüedad
+    },
+    "amenidades": {
+        "alberca": bool,
+        "jardin": bool,
+        "seguridad": bool,
+        "areas_comunes": List[str],
+        "adicionales": List[str]
+    },
+    "legal": {
+        "escrituras": bool,
+        "credito_infonavit": bool,
+        "credito_fovissste": bool,
+        "credito_bancario": bool,
+        "estatus_legal": str
+    },
+    "contacto": {
+        "nombre": str,
+        "telefono": str,
+        "email": str,
+        "tipo_agente": str        # Particular/Inmobiliaria
+    },
+    "multimedia": {
+        "imagenes": List[str],    # URLs de imágenes
+        "video": Optional[str]    # URL de video
+    },
+    "estado": {
+        "activa": bool,           # Si la publicación está activa
+        "fecha_actualizacion": str # Última actualización
+    }
+}
+
+# Constantes de validación
+RANGOS_VALIDOS = {
+    "precio_venta": (200_000, 100_000_000),
+    "precio_renta": (1_500, 300_000),
+    "superficie": (20, 10000),
+    "construccion": (20, 2000),
+    "recamaras": (1, 10),
+    "banos": (1, 6),
+    "niveles": (1, 4),
+    "estacionamientos": (0, 6)
+}
+
+class ErrorNormalizacion(Exception):
+    """Excepción para errores de normalización"""
+    pass
+
+def normalizar_texto(texto: str) -> str:
+    """
+    Normaliza un texto para procesamiento.
+    
+    Args:
+        texto: Texto a normalizar
+        
+    Returns:
+        Texto normalizado
+    """
+    if not texto:
+        return ""
+    
+    # Convertir a minúsculas y eliminar espacios extras
+    texto = texto.lower().strip()
+    texto = re.sub(r'\s+', ' ', texto)
+    
+    # Normalizar caracteres especiales
+    reemplazos = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ü': 'u', 'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i',
+        'ò': 'o', 'ù': 'u'
+    }
+    for k, v in reemplazos.items():
+        texto = texto.replace(k, v)
+    
+    return texto
+
+def normalizar_precio(precio: Union[str, float, int], tipo_operacion: str) -> Dict:
+    """
+    Normaliza el precio de una propiedad.
+    
+    Args:
+        precio: Precio a normalizar
+        tipo_operacion: Tipo de operación (venta/renta)
+        
+    Returns:
+        Dict con precio normalizado
+    """
+    resultado = {
+        "valor": None,
+        "moneda": "MXN",
+        "periodo": "Total" if tipo_operacion == "venta" else "Mensual"
+    }
+    
+    if not precio:
+        return resultado
+        
+    try:
+        # Si es string, extraer número
+        if isinstance(precio, str):
+            precio = normalizar_texto(precio)
+            # Patrones comunes de precios
+            patrones = [
+                r"(?:\$|MXN|mnx|MX\$)?\s?([\d.,]+)\s?(millones?|millón|mil|k|M|MM)?",
+                r"(\d+(?:\.\d+)?)\s*(?:mil|k|M|MM)?"
+            ]
+            
+            for patron in patrones:
+                if match := re.search(patron, precio):
+                    numero, unidad = match.groups()
+                    numero = float(numero.replace(',', '').replace('.', '')) if ',' in numero and '.' in numero else float(numero.replace(',', '').replace('.', '', 1))
+                    
+                    if unidad in ['millon', 'millones', 'mm', 'm']:
+                        numero *= 1_000_000
+                    elif unidad in ['mil', 'k']:
+                        numero *= 1_000
+                        
+                    precio = numero
+                    break
+        
+        # Convertir a float
+        precio = float(precio)
+        
+        # Validar rango según tipo de operación
+        rango = RANGOS_VALIDOS["precio_venta"] if tipo_operacion == "venta" else RANGOS_VALIDOS["precio_renta"]
+        if rango[0] <= precio <= rango[1]:
+            resultado["valor"] = precio
+        else:
+            logger.warning(f"Precio {precio} fuera de rango válido {rango}")
+            
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error normalizando precio: {e}")
+        
+    return resultado
+
+def normalizar_caracteristicas(caracteristicas: Dict) -> Dict:
+    """
+    Normaliza las características de una propiedad.
+    Maneja tanto el formato antiguo como el nuevo.
+    
+    Args:
+        caracteristicas: Dict con características a normalizar
+        
+    Returns:
+        Dict con características normalizadas
+    """
+    resultado = {
+        "recamaras": None,
+        "banos": None,
+        "estacionamientos": None,
+        "niveles": None,
+        "superficie_construida": None,
+        "superficie_terreno": None,
+        "antiguedad": None
+    }
+    
+    if not caracteristicas:
+        return resultado
+    
+    # Mapeo de campos para compatibilidad
+    mapeo_campos = {
+        "superficie_m2": "superficie_terreno",
+        "construccion_m2": "superficie_construida",
+        "edad": "antiguedad"
+    }
+    
+    # Aplicar mapeo y normalizar valores
+    for campo_original, valor in caracteristicas.items():
+        # Determinar el campo de destino
+        campo_destino = mapeo_campos.get(campo_original, campo_original)
+        
+        # Solo procesar si el campo de destino está en nuestro esquema
+        if campo_destino in resultado and valor is not None:
+            try:
+                if campo_destino in ["recamaras", "estacionamientos", "niveles"]:
+                    # Campos enteros
+                    valor_int = int(valor)
+                    if campo_destino == "recamaras" and RANGOS_VALIDOS["recamaras"][0] <= valor_int <= RANGOS_VALIDOS["recamaras"][1]:
+                        resultado[campo_destino] = valor_int
+                    elif campo_destino == "estacionamientos" and RANGOS_VALIDOS["estacionamientos"][0] <= valor_int <= RANGOS_VALIDOS["estacionamientos"][1]:
+                        resultado[campo_destino] = valor_int
+                    elif campo_destino == "niveles" and RANGOS_VALIDOS["niveles"][0] <= valor_int <= RANGOS_VALIDOS["niveles"][1]:
+                        resultado[campo_destino] = valor_int
+                        
+                elif campo_destino == "banos":
+                    # Baños puede ser decimal
+                    valor_float = float(valor)
+                    if RANGOS_VALIDOS["banos"][0] <= valor_float <= RANGOS_VALIDOS["banos"][1]:
+                        resultado[campo_destino] = valor_float
+                        
+                elif campo_destino in ["superficie_construida", "superficie_terreno"]:
+                    # Superficies
+                    valor_float = float(valor)
+                    rango = RANGOS_VALIDOS["construccion"] if campo_destino == "superficie_construida" else RANGOS_VALIDOS["superficie"]
+                    if rango[0] <= valor_float <= rango[1]:
+                        resultado[campo_destino] = valor_float
+                        
+                elif campo_destino == "antiguedad":
+                    # Antigüedad
+                    valor_int = int(valor)
+                    if 0 <= valor_int <= 100:  # Rango lógico para antigüedad
+                        resultado[campo_destino] = valor_int
+                        
+            except (ValueError, TypeError):
+                logger.warning(f"Error convirtiendo {campo_original}={valor} a {campo_destino}")
+                pass
+    
+    return resultado
+        
+    # Normalizar recámaras
+    if "recamaras" in caracteristicas:
+        try:
+            valor = int(caracteristicas["recamaras"])
+            if RANGOS_VALIDOS["recamaras"][0] <= valor <= RANGOS_VALIDOS["recamaras"][1]:
+                resultado["recamaras"] = valor
+        except (ValueError, TypeError):
+            pass
+            
+    # Normalizar baños
+    if "banos" in caracteristicas:
+        try:
+            valor = float(caracteristicas["banos"])
+            if RANGOS_VALIDOS["banos"][0] <= valor <= RANGOS_VALIDOS["banos"][1]:
+                resultado["banos"] = valor
+        except (ValueError, TypeError):
+            pass
+            
+    # Normalizar estacionamientos
+    if "estacionamientos" in caracteristicas:
+        try:
+            valor = int(caracteristicas["estacionamientos"])
+            if RANGOS_VALIDOS["estacionamientos"][0] <= valor <= RANGOS_VALIDOS["estacionamientos"][1]:
+                resultado["estacionamientos"] = valor
+        except (ValueError, TypeError):
+            pass
+            
+    # Normalizar niveles
+    if "niveles" in caracteristicas:
+        try:
+            valor = int(caracteristicas["niveles"])
+            if RANGOS_VALIDOS["niveles"][0] <= valor <= RANGOS_VALIDOS["niveles"][1]:
+                resultado["niveles"] = valor
+        except (ValueError, TypeError):
+            pass
+            
+    # Normalizar superficies
+    if "superficie_construida" in caracteristicas:
+        try:
+            valor = float(caracteristicas["superficie_construida"])
+            if RANGOS_VALIDOS["construccion"][0] <= valor <= RANGOS_VALIDOS["construccion"][1]:
+                resultado["superficie_construida"] = valor
+        except (ValueError, TypeError):
+            pass
+            
+    if "superficie_terreno" in caracteristicas:
+        try:
+            valor = float(caracteristicas["superficie_terreno"])
+            if RANGOS_VALIDOS["superficie"][0] <= valor <= RANGOS_VALIDOS["superficie"][1]:
+                resultado["superficie_terreno"] = valor
+        except (ValueError, TypeError):
+            pass
+            
+    return resultado
+
+def normalizar_amenidades(amenidades: Dict) -> Dict:
+    """
+    Normaliza las amenidades de una propiedad.
+    
+    Args:
+        amenidades: Dict con amenidades a normalizar
+        
+    Returns:
+        Dict con amenidades normalizadas
+    """
+    resultado = {
+        "alberca": False,
+        "jardin": False,
+        "seguridad": False,
+        "areas_comunes": [],
+        "adicionales": []
+    }
+    
+    if not amenidades:
+        return resultado
+        
+    # Normalizar booleanos
+    for key in ["alberca", "jardin", "seguridad"]:
+        if key in amenidades:
+            resultado[key] = bool(amenidades[key])
+            
+    # Normalizar listas
+    if "areas_comunes" in amenidades:
+        if isinstance(amenidades["areas_comunes"], list):
+            resultado["areas_comunes"] = [str(x) for x in amenidades["areas_comunes"]]
+        elif isinstance(amenidades["areas_comunes"], str):
+            resultado["areas_comunes"] = [amenidades["areas_comunes"]]
+            
+    if "adicionales" in amenidades:
+        if isinstance(amenidades["adicionales"], list):
+            resultado["adicionales"] = [str(x) for x in amenidades["adicionales"]]
+        elif isinstance(amenidades["adicionales"], str):
+            resultado["adicionales"] = [amenidades["adicionales"]]
+            
+    return resultado
+
+def normalizar_legal(legal: Dict) -> Dict:
+    """
+    Normaliza la información legal de una propiedad.
+    
+    Args:
+        legal: Dict con información legal a normalizar
+        
+    Returns:
+        Dict con información legal normalizada
+    """
+    resultado = {
+        "escrituras": False,
+        "credito_infonavit": False,
+        "credito_fovissste": False,
+        "credito_bancario": False,
+        "estatus_legal": None
+    }
+    
+    if not legal:
+        return resultado
+        
+    # Normalizar booleanos
+    for key in ["escrituras", "credito_infonavit", "credito_fovissste", "credito_bancario"]:
+        if key in legal:
+            resultado[key] = bool(legal[key])
+            
+    # Normalizar estatus legal
+    if "estatus_legal" in legal:
+        resultado["estatus_legal"] = str(legal["estatus_legal"])
+        
+    return resultado
+
+def normalizar_propiedad(propiedad: Dict) -> Dict:
+    """
+    Normaliza una propiedad completa según el esquema estandarizado.
+    
+    Args:
+        propiedad: Dict con datos de la propiedad
+        
+    Returns:
+        Dict con propiedad normalizada
+    """
+    try:
+        resultado = {
+            "id": str(propiedad.get("id", "")),
+            "fecha_publicacion": str(propiedad.get("fecha_publicacion", "")),
+            "tipo_operacion": str(propiedad.get("tipo_operacion", "")).lower(),
+            "tipo_propiedad": str(propiedad.get("tipo_propiedad", "")).lower(),
+            "precio": normalizar_precio(
+                propiedad.get("precio"),
+                propiedad.get("tipo_operacion", "")
+            ),
+            "ubicacion": {
+                "ciudad": str(propiedad.get("ciudad", "")),
+                "colonia": str(propiedad.get("colonia", "")),
+                "direccion": str(propiedad.get("direccion", "")),
+                "coordenadas": {
+                    "lat": float(propiedad.get("lat", 0)),
+                    "lng": float(propiedad.get("lng", 0))
+                }
+            },
+            "caracteristicas": normalizar_caracteristicas(
+                propiedad.get("caracteristicas", {})
+            ),
+            "amenidades": normalizar_amenidades(
+                propiedad.get("amenidades", {})
+            ),
+            "legal": normalizar_legal(
+                propiedad.get("legal", {})
+            ),
+            "contacto": {
+                "nombre": str(propiedad.get("nombre_contacto", "")),
+                "telefono": str(propiedad.get("telefono", "")),
+                "email": str(propiedad.get("email", "")),
+                "tipo_agente": str(propiedad.get("tipo_agente", ""))
+            },
+            "multimedia": {
+                "imagenes": [str(x) for x in propiedad.get("imagenes", [])],
+                "video": str(propiedad.get("video", "")) if propiedad.get("video") else None
+            },
+            "estado": {
+                "activa": bool(propiedad.get("activa", True)),
+                "fecha_actualizacion": str(datetime.now().isoformat())
+            }
+        }
+        
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Error normalizando propiedad: {e}")
+        raise ErrorNormalizacion(f"Error normalizando propiedad: {e}")
+
+def procesar_archivo(archivo_entrada: str, archivo_salida: str) -> None:
+    """
+    Procesa un archivo de propiedades y genera uno normalizado.
+    
+    Args:
+        archivo_entrada: Ruta al archivo de entrada
+        archivo_salida: Ruta al archivo de salida
+    """
+    try:
+        # Leer archivo de entrada
+        with open(archivo_entrada, 'r', encoding='utf-8') as f:
+            propiedades = json.load(f)
+            
+        # Normalizar cada propiedad
+        propiedades_normalizadas = []
+        for prop in propiedades:
+            try:
+                prop_norm = normalizar_propiedad(prop)
+                propiedades_normalizadas.append(prop_norm)
+            except ErrorNormalizacion as e:
+                logger.error(f"Error procesando propiedad: {e}")
+                continue
+                
+        # Guardar archivo normalizado
+        with open(archivo_salida, 'w', encoding='utf-8') as f:
+            json.dump(propiedades_normalizadas, f, indent=2, ensure_ascii=False)
+            
+        logger.info(f"Procesamiento completado. {len(propiedades_normalizadas)} propiedades normalizadas.")
+        
+    except Exception as e:
+        logger.error(f"Error procesando archivo: {e}")
+        raise
+
+def normalizar_propiedades(propiedades: List[Dict]) -> List[Dict]:
+    """
+    Normaliza una lista de propiedades.
+    
+    Args:
+        propiedades: Lista de propiedades a normalizar
+        
+    Returns:
+        Lista de propiedades normalizadas
+    """
+    propiedades_normalizadas = []
+    
+    for prop in propiedades:
+        try:
+            # Convertir características de lista a dict si es necesario
+            if isinstance(prop.get('caracteristicas'), list):
+                # Crear dict básico con valores None
+                caracteristicas_dict = {
+                    'recamaras': None,
+                    'banos': None,
+                    'estacionamientos': None,
+                    'niveles': None,
+                    'superficie_construida': None,
+                    'superficie_terreno': None,
+                    'antiguedad': None
+                }
+                
+                # Mantener valores existentes si están en el dict original
+                if 'superficie_construida' in prop:
+                    caracteristicas_dict['superficie_construida'] = prop.get('superficie_construida')
+                if 'superficie_terreno' in prop:
+                    caracteristicas_dict['superficie_terreno'] = prop.get('superficie_terreno')
+                    
+                prop['caracteristicas'] = caracteristicas_dict
+            
+            prop_normalizada = normalizar_propiedad(prop)
+            propiedades_normalizadas.append(prop_normalizada)
+            
+        except Exception as e:
+            logger.error(f"Error normalizando propiedad {prop.get('id', 'unknown')}: {e}")
+            continue
+            
+    return propiedades_normalizadas
+
+if __name__ == "__main__":
+    # Ejemplo de uso
+    procesar_archivo(
+        "resultados/propiedades_estructuradas.json",
+        "resultados/propiedades_normalizadas.json"
+    ) 

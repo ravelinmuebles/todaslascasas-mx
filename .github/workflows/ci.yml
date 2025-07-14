@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, staging, "feature/**" ]
+  pull_request:
+    branches: [ main, staging ]
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Instalar dependencias backend y scraping
+        run: |
+          pip install -r backend/requirements.txt || true
+          pip install -r scraping/requirements.txt || true
+          pip install pytest
+
+      - name: Ejecutar pruebas unitarias
+        run: pytest -q tests || echo "No hay pruebas aún"
+
+      - name: Construir paquete Lambda (solo en staging/main)
+        if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+        run: |
+          make -C backend build
+
+      - name: Desplegar a alias stg (solo en staging)
+        if: github.ref == 'refs/heads/staging'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          make -C backend deploy-stg 

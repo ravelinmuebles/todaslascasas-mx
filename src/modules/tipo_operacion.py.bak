@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+MÓDULO DE DETECCIÓN DE TIPO DE OPERACIÓN
+---------------------------------------
+
+Este módulo es responsable ÚNICAMENTE de determinar si una propiedad
+es para venta o renta, basándose en el análisis de texto y precio.
+
+RESPONSABILIDADES:
+1. Analizar texto para detectar tipo de operación
+2. Mantener catálogo de palabras clave
+3. Validar tipos de operación
+4. Proveer estadísticas de confianza
+
+REGLAS DE CLASIFICACIÓN (en orden de prioridad):
+1. Si hay palabras clave claras en la descripción -> Usar esa clasificación
+2. Si el precio es >= $2,000,000 MXN -> VENTA (sin importar otras señales)
+3. Si el precio es <= $80,000 MXN -> RENTA (sin importar otras señales)
+4. Si el precio es > $300,000 y NO hay palabras clave -> VENTA
+5. Si el precio es < $300,000 y NO hay palabras clave -> DESCONOCIDO
+"""
+
+import re
+import logging
+from typing import Dict, Optional, List, Tuple
+from decimal import Decimal
+
+# Configuración de logging
+logger = logging.getLogger('tipo_operacion')
+logger.setLevel(logging.DEBUG)
+
+# Tipos de operación válidos
+TIPOS_OPERACION = {
+    "VENTA": "venta",
+    "RENTA": "renta",
+    "DESCONOCIDO": "desconocido"
+}
+
+# Umbrales de precio (en MXN) - ACTUALIZADOS
+PRECIO_DEFINITIVO_VENTA = 2_000_000  # Si es mayor a esto, es VENTA sin duda
+PRECIO_DEFINITIVO_RENTA = 80_000     # Si es menor a esto, es RENTA sin duda
+PRECIO_UMBRAL_VENTA = 300_000        # Si es mayor a esto y sin palabras clave, es VENTA
+
+# Palabras clave con pesos
+PALABRAS_VENTA = {
+    # Términos directos (peso 5)
+    "venta": 5, "vendemos": 5, "se vende": 5, "en venta": 5,
+    "vendo": 5, "precio de venta": 5, "venta de casa": 5,
+    "venta de departamento": 5, "casa en venta": 5,
+    "depto en venta": 5, "departamento en venta": 5,
+    "terreno en venta": 5, "local en venta": 5,
+    "propiedad en venta": 5, "venta directa": 5,
+    
+    # Términos legales (peso 4)
+    "escrituras": 4, "escriturada": 4, "titulo de propiedad": 4,
+    "cesion de derechos": 4, "cesión de derechos": 4,
+    "libre de gravamen": 4, "predial al corriente": 4,
+    "pagos de contado": 4, "solo se aceptan pagos": 4,
+    "entrega inmediata": 4,
+    
+    # Términos financieros (peso 3)
+    "credito infonavit": 3, "crédito infonavit": 3,
+    "credito fovissste": 3, "crédito fovissste": 3,
+    "credito bancario": 3, "crédito bancario": 3,
+    "enganche": 3, "anticipo": 3
+}
+
+PALABRAS_RENTA = {
+    # Términos directos (peso 5)
+    "se renta": 5, "en renta": 5, "alquiler": 5,
+    "se alquila": 5, "casa en renta": 5, "depto en renta": 5,
+    "departamento en renta": 5, "renta de casa": 5,
+    "renta mensual": 5, "precio de renta": 5,
+    "rentamos": 5, "ideal para renta": 5,
+    
+    # Términos de depósito (peso 4)
+    "mes de depósito": 4, "depósito en garantía": 4,
+    "depósito": 4, "garantía": 4,
+    
+    # Términos secundarios (peso 3)
+    "temporal": 3, "amueblado": 3, "sin muebles": 3,
+    "aval": 3, "fiador": 3, "mensualidad": 3,
+    "por mes": 3, "al mes": 3
+}
+
+def _normalizar_texto(texto: str) -> str:
+    """
+    Normaliza texto para análisis.
+    USO INTERNO ÚNICAMENTE.
+    """
+    if not texto:
+        return ""
+    
+    # Convertir a minúsculas y eliminar espacios extras
+    texto = texto.lower().strip()
+    texto = re.sub(r'\s+', ' ', texto)
+    
+    # Normalizar caracteres especiales
+    reemplazos = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ü': 'u', 'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i',
+        'ò': 'o', 'ù': 'u'
+    }
+    for k, v in reemplazos.items():
+        texto = texto.replace(k, v)
+    
+    return texto
+
+def extraer_tipo_operacion(texto: str, precio: Optional[Dict] = None) -> str:
+    """
+    Determina el tipo de operación basado en el texto y precio.
+    LÓGICA NUEVA SEGÚN REQUERIMIENTOS DEL USUARIO.
+    
+    Args:
+        texto: Texto de la descripción
+        precio: Diccionario con información del precio
+        
+    Returns:
+        str: Tipo de operación ('venta', 'renta' o 'desconocido')
+    """
+    if not texto:
+        texto = ""
+    
+    texto = texto.lower().strip()
+    
+    # 1. Analizar palabras clave en el texto PRIMERO
+    peso_venta = 0
+    peso_renta = 0
+    palabras_venta_encontradas = []
+    palabras_renta_encontradas = []
+    
+    # Buscar palabras clave de venta
+    for palabra, peso in PALABRAS_VENTA.items():
+        if palabra in texto:
+            peso_venta += peso
+            palabras_venta_encontradas.append(palabra)
+            
+    # Buscar palabras clave de renta
+    for palabra, peso in PALABRAS_RENTA.items():
+        if palabra in texto:
+            peso_renta += peso
+            palabras_renta_encontradas.append(palabra)
+    
+    # CORRECCIÓN ESPECÍFICA: Detectar contextos de inversión que mencionan "rentar"
+    # pero en realidad son propiedades en VENTA
+    contextos_inversion = [
+        "para rentar", "potencial para renta", "ideal para rentar cuartos",
+        "local para rentar", "ingreso por renta", "produce renta"
+    ]
+    
+    # Si hay contextos de inversión y además hay señales claras de venta,
+    # reducir el peso de renta
+    for contexto in contextos_inversion:
+        if contexto in texto:
+            # Si también hay señales de venta, es una propiedad en venta con potencial de renta
+            if peso_venta >= 3:
+                peso_renta = max(0, peso_renta - 3)  # Reducir peso de renta
+                logger.info(f"Contexto de inversión detectado: '{contexto}' - Reduciendo peso de renta")
+            else:
+                # Si no hay señales de venta, podría ser ambiguo
+                peso_renta += 1  # Solo agregar peso mínimo
+    
+    logger.debug(f"Peso venta: {peso_venta} ({', '.join(palabras_venta_encontradas)})")
+    logger.debug(f"Peso renta: {peso_renta} ({', '.join(palabras_renta_encontradas)})")
+    
+    # Si hay palabras clave claras, usar esa clasificación
+    diferencia = abs(peso_venta - peso_renta)
+    if diferencia >= 3:
+        if peso_venta > peso_renta and peso_venta >= 3:
+            logger.info("VENTA confirmada por palabras clave")
+            return "venta"
+        elif peso_renta > peso_venta and peso_renta >= 3:
+            logger.info("RENTA confirmada por palabras clave")
+            return "renta"
+    
+    # 2. Si NO hay palabras clave claras, usar precio
+    precio_valor = None
+    if precio:
+        try:
+            if isinstance(precio, dict):
+                precio_valor = float(str(precio.get("valor", "0")).replace("$", "").replace(",", "").strip())
+            else:
+                precio_valor = float(str(precio).replace("$", "").replace(",", "").strip())
+            
+            # Si el precio es muy alto, es VENTA definitiva
+            if precio_valor >= PRECIO_DEFINITIVO_VENTA:
+                logger.info(f"VENTA confirmada por precio muy alto: ${precio_valor:,.2f}")
+                return "venta"
+                
+            # Si el precio es muy bajo, es RENTA definitiva
+            if precio_valor <= PRECIO_DEFINITIVO_RENTA:
+                logger.info(f"RENTA confirmada por precio muy bajo: ${precio_valor:,.2f}")
+                return "renta"
+                
+            # NUEVA LÓGICA: Si precio > $300,000 y no hay palabras clave = VENTA
+            if precio_valor > PRECIO_UMBRAL_VENTA:
+                logger.info(f"VENTA asignada por precio > $300K sin palabras clave: ${precio_valor:,.2f}")
+                return "venta"
+            else:
+                # Si precio < $300,000 y no hay palabras clave = DESCONOCIDO
+                logger.info(f"DESCONOCIDO asignado por precio < $300K sin palabras clave: ${precio_valor:,.2f}")
+                return "desconocido"
+                
+        except (ValueError, TypeError, KeyError) as e:
+            logger.warning(f"Error procesando precio: {e}")
+            precio_valor = None
+    
+    # 3. Si no hay precio válido y no hay palabras clave claras
+    logger.info("DESCONOCIDO - sin precio válido ni palabras clave")
+    return "desconocido"
+
+def actualizar_tipo_operacion(propiedad: Dict) -> Dict:
+    """
+    Actualiza el tipo de operación de una propiedad.
+    
+    Args:
+        propiedad: Diccionario con los datos de la propiedad
+        
+    Returns:
+        Dict: La propiedad con el tipo de operación actualizado
+    """
+    # Inicializar el campo propiedad si no existe
+    if "propiedad" not in propiedad:
+        propiedad["propiedad"] = {}
+    
+    # Recolectar textos para análisis
+    textos = []
+    
+    # Agregar descripción original
+    if "descripcion_original" in propiedad:
+        textos.append(str(propiedad["descripcion_original"]))
+        
+    # Agregar título
+    if "titulo" in propiedad:
+        textos.append(str(propiedad["titulo"]))
+    
+    # Agregar descripción estructurada si existe
+    if "descripcion" in propiedad:
+        if isinstance(propiedad["descripcion"], dict):
+            if "texto_original" in propiedad["descripcion"]:
+                textos.append(str(propiedad["descripcion"]["texto_original"]))
+            if "texto_limpio" in propiedad["descripcion"]:
+                textos.append(str(propiedad["descripcion"]["texto_limpio"]))
+        else:
+            textos.append(str(propiedad["descripcion"]))
+    
+    texto_completo = " ".join(filter(None, textos))
+    
+    # Obtener precio
+    precio = None
+    if "propiedad" in propiedad and "precio" in propiedad["propiedad"]:
+        precio = propiedad["propiedad"]["precio"]
+    
+    # Detectar tipo de operación
+    tipo_op = extraer_tipo_operacion(texto_completo, precio)
+    
+    # Actualizar el tipo de operación en la propiedad
+    propiedad["propiedad"]["tipo_operacion"] = tipo_op
+    
+    return propiedad
+
+def validar_tipo_operacion(tipo: str) -> bool:
+    """
+    Valida si un tipo de operación es válido.
+    
+    Args:
+        tipo: Tipo de operación a validar
+        
+    Returns:
+        bool: True si es válido
+    """
+    return tipo.lower() in [t.lower() for t in TIPOS_OPERACION.values()]
+
+def obtener_estadisticas(propiedades: List[Dict]) -> Dict:
+    """
+    Genera estadísticas sobre tipos de operación.
+    
+    Args:
+        propiedades: Lista de propiedades
+        
+    Returns:
+        Dict con estadísticas
+    """
+    stats = {
+        "total": len(propiedades),
+        "por_tipo": {t: 0 for t in TIPOS_OPERACION.values()},
+        "confianza_promedio": 0,
+        "con_evidencia": 0
+    }
+    
+    confianza_total = 0
+    for prop in propiedades:
+        tipo_op = prop.get("propiedad", {}).get("tipo_operacion", {})
+        
+        # Contar por tipo
+        tipo = tipo_op.get("tipo", TIPOS_OPERACION["DESCONOCIDO"])
+        stats["por_tipo"][tipo] = stats["por_tipo"].get(tipo, 0) + 1
+        
+        # Acumular confianza
+        confianza = tipo_op.get("confianza", 0)
+        confianza_total += confianza
+        
+        # Contar con evidencia
+        if tipo_op.get("evidencia"):
+            stats["con_evidencia"] += 1
+    
+    # Calcular promedio de confianza
+    stats["confianza_promedio"] = confianza_total / len(propiedades) if propiedades else 0
+    
+    return stats 

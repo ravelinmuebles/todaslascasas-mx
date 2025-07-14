@@ -1,0 +1,214 @@
+// Node.js + Express para servir archivos estáticos
+const express = require("express");
+const path = require("path");
+const compression = require('compression');
+const fs = require('fs').promises;
+const fsSync = require('fs');
+const cors = require('cors');
+
+// Importar e instanciar el indexador
+const IndicesPropiedades = require('./src/indexador');
+
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+// Instanciar el indexador una sola vez
+const indicesPropiedades = new IndicesPropiedades();
+
+// Middleware
+app.use(compression({
+    level: 6,
+    threshold: 1024
+}));
+app.use(cors());
+app.use(express.json());
+
+// Middleware para servir archivos estáticos con caché
+app.use(express.static(path.join(__dirname), {
+    maxAge: '1h',
+    etag: true,
+    lastModified: true
+}));
+app.use('/resultados', express.static(path.join(__dirname, 'resultados'), {
+    maxAge: '1h',
+    etag: true,
+    lastModified: true
+}));
+
+// Middleware para logging
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
+// Middleware para CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, If-None-Match');
+    next();
+});
+
+// Middleware para caché HTTP
+const cacheControl = (maxAge) => (req, res, next) => {
+    res.set('Cache-Control', `public, max-age=${maxAge}`);
+    next();
+};
+
+// Ruta para index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/index.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Ruta para verificar el estado del servidor
+app.get('/health', cacheControl(30), (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        indices: {
+            cargados: indicesPropiedades.datosIndexados,
+            ultimaActualizacion: indicesPropiedades.lastLoadTime
+        }
+    });
+});
+
+// Endpoint para obtener índices
+app.get('/api/indices', async (req, res) => {
+    try {
+        // Verificar si necesitamos recargar los datos
+        if (await indicesPropiedades.necesitaRecargar()) {
+            await indicesPropiedades.cargarDatos(true);
+        }
+        
+        const estadisticas = indicesPropiedades.estadisticasCache;
+        const etag = indicesPropiedades.cacheEtag;
+        
+        // Verificar si el cliente tiene una versión válida en caché
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end();
+        }
+        
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'public, max-age=1800'); // 30 minutos
+        res.json(estadisticas);
+    } catch (error) {
+        console.error('Error al obtener índices:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Endpoint para obtener propiedades filtradas y paginadas
+app.get('/api/propiedades', async (req, res) => {
+    try {
+        // Verificar si necesitamos recargar los datos
+        if (await indicesPropiedades.necesitaRecargar()) {
+            await indicesPropiedades.cargarDatos(true);
+        }
+        
+        const {
+            page = 1,
+            limit = 20,
+            ciudad,
+            busqueda,
+            precioMin,
+            precioMax,
+            tipoOperacion,
+            tipoPropiedad
+        } = req.query;
+
+        // Construir clave de caché
+        const cacheKey = JSON.stringify({
+            page,
+            limit,
+            ciudad,
+            busqueda,
+            precioMin,
+            precioMax,
+            tipoOperacion,
+            tipoPropiedad
+        });
+
+        // Verificar si tenemos el resultado en caché
+        const resultadoCacheado = indicesPropiedades.cacheResultados.get(cacheKey);
+        if (resultadoCacheado && Date.now() - resultadoCacheado.timestamp < 1800000) { // 30 minutos
+            if (req.headers['if-none-match'] === resultadoCacheado.etag) {
+                return res.status(304).end();
+            }
+            
+            res.setHeader('ETag', resultadoCacheado.etag);
+            res.setHeader('Cache-Control', 'public, max-age=1800');
+            return res.json(resultadoCacheado.datos);
+        }
+
+        // Aplicar filtros
+        let resultado = await indicesPropiedades.buscar({
+            ciudad: ciudad ? ciudad.split(',') : undefined,
+            texto: busqueda,
+            precioMin: precioMin ? parseFloat(precioMin) : undefined,
+            precioMax: precioMax ? parseFloat(precioMax) : undefined,
+            tipoOperacion: tipoOperacion ? tipoOperacion.split(',') : undefined,
+            tipoPropiedad: tipoPropiedad ? tipoPropiedad.split(',') : undefined,
+            page: parseInt(page),
+            limit: parseInt(limit)
+        });
+
+        // Generar y almacenar en caché
+        const etag = `${indicesPropiedades.cacheEtag}_${cacheKey}`;
+        indicesPropiedades.cacheResultados.set(cacheKey, {
+            etag,
+            datos: resultado,
+            timestamp: Date.now()
+        });
+
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'public, max-age=1800');
+        res.json(resultado);
+
+    } catch (error) {
+        console.error('Error al obtener propiedades:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Manejo de errores
+app.use((err, req, res, next) => {
+    console.error('Error no manejado:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+});
+
+// Iniciar servidor
+const server = app.listen(PORT, async () => {
+    try {
+        // Cargar datos iniciales
+        await indicesPropiedades.cargarDatos(true);
+        console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    } catch (error) {
+        console.error('Error al iniciar servidor:', error);
+        process.exit(1);
+    }
+});
+
+// Manejo de señales para cierre graceful
+process.on('SIGTERM', () => {
+    console.log('Recibida señal SIGTERM. Cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado.');
+        process.exit(0);
+    });
+});
+
+// Manejo de excepciones no capturadas
+process.on('uncaughtException', (err) => {
+    console.error('Excepción no capturada:', err);
+    server.close(() => {
+        console.log('Servidor cerrado debido a error.');
+        process.exit(1);
+    });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Promesa rechazada no manejada:', reason);
+});

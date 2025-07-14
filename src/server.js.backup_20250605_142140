@@ -1,0 +1,167 @@
+// Node.js + Express para servir archivos estáticos
+const express = require("express");
+const path = require("path");
+const compression = require('compression');
+const fs = require('fs').promises;
+const fsSync = require('fs');
+const cors = require('cors');
+
+// Importar indexador con manejo de errores
+let indicesPropiedades;
+try {
+    indicesPropiedades = require(path.join(__dirname, 'src', 'indexador.js'));
+} catch (error) {
+    console.error('Error crítico al cargar el indexador:', error);
+    process.exit(1);
+}
+
+const app = express();
+const port = process.env.PORT || 8080;
+
+// Middleware
+app.use(compression());
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
+
+// Middleware para logging
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
+// Middleware para CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
+// Ruta para index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/index.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Ruta para verificar el estado del servidor
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        indices: {
+            cargados: indicesPropiedades.indices ? true : false,
+            ultimaActualizacion: indicesPropiedades.lastLoadTime
+        }
+    });
+});
+
+// API para obtener índices
+app.get('/api/indices', async (req, res) => {
+    try {
+        const estadisticas = await indicesPropiedades.cargarDatos();
+        res.json(estadisticas);
+    } catch (error) {
+        console.error('Error al cargar índices:', error);
+        res.status(500).json({ 
+            error: 'Error al cargar índices',
+            detalles: error.message 
+        });
+    }
+});
+
+// API para obtener propiedades
+app.get('/api/propiedades', async (req, res) => {
+    try {
+        const { page = 1, limit = 20, ciudad, busqueda, precioMin, precioMax, tipoOperacion } = req.query;
+        
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        
+        if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
+            return res.status(400).json({ error: 'Parámetros de paginación inválidos' });
+        }
+
+        const resultados = indicesPropiedades.buscar({
+            ciudad,
+            precioMin: precioMin ? parseFloat(precioMin) : null,
+            precioMax: precioMax ? parseFloat(precioMax) : null,
+            tipoOperacion,
+            busqueda,
+            page: pageNum,
+            limit: limitNum
+        });
+
+        res.json(resultados);
+    } catch (error) {
+        console.error('Error al buscar propiedades:', error);
+        res.status(500).json({ 
+            error: 'Error al procesar la solicitud',
+            detalles: error.message
+        });
+    }
+});
+
+// Manejo de errores global
+app.use((err, req, res, next) => {
+    console.error('Error no manejado:', err);
+    res.status(500).json({ 
+        error: 'Error interno del servidor',
+        detalles: err.message
+    });
+});
+
+// Iniciar servidor
+const server = app.listen(port, '0.0.0.0', async () => {
+    try {
+        await indicesPropiedades.cargarDatos();
+        console.log('Índices cargados correctamente');
+        console.log(`Servidor corriendo en http://localhost:${port}`);
+    } catch (error) {
+        console.error('Error al cargar índices iniciales:', error);
+        process.exit(1);
+    }
+}).on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Puerto ${port} está en uso. Intentando cerrar el proceso existente...`);
+        require('child_process').exec(`lsof -i :${port} | grep LISTEN | awk '{print $2}' | xargs kill -9`);
+        setTimeout(() => {
+            server.listen(port);
+        }, 1000);
+    } else {
+        console.error('Error al iniciar el servidor:', error);
+        process.exit(1);
+    }
+});
+
+// Manejo de señales
+process.on('SIGTERM', () => {
+    console.log('Recibida señal SIGTERM. Cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado.');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Recibida señal SIGINT. Cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado.');
+        process.exit(0);
+    });
+});
+
+// Manejo de excepciones no capturadas
+process.on('uncaughtException', (err) => {
+    console.error('Excepción no capturada:', err);
+    server.close(() => {
+        console.log('Servidor cerrado debido a error.');
+        process.exit(1);
+    });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Promesa rechazada no manejada:', reason);
+});

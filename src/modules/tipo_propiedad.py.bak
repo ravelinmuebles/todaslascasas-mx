@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+MÓDULO DE DETECCIÓN DE TIPO DE PROPIEDAD
+--------------------------------------
+
+Este módulo es responsable de determinar el tipo de propiedad basándose
+en el análisis de texto y características físicas.
+
+RESPONSABILIDADES:
+1. Analizar texto para detectar tipo de propiedad
+2. Validar contra características físicas
+3. Mantener catálogo de tipos y palabras clave
+4. Proveer estadísticas de confianza
+
+REGLAS:
+1. Priorizar evidencia física sobre texto
+2. NO modificar otros aspectos de la propiedad
+3. Mantener registro de decisiones tomadas
+4. En caso de duda, marcar como DESCONOCIDO
+"""
+
+import re
+import logging
+from typing import Dict, Optional, List, Tuple
+from decimal import Decimal
+
+# Configuración de logging
+logger = logging.getLogger('tipo_propiedad')
+logger.setLevel(logging.DEBUG)
+
+# Tipos de propiedad válidos
+TIPOS_PROPIEDAD = {
+    "CASA_SOLA": "casa_sola",
+    "CASA_CONDOMINIO": "casa_condominio",
+    "DEPARTAMENTO": "departamento",
+    "TERRENO": "terreno",
+    "LOCAL": "local",
+    "OFICINA": "oficina",
+    "BODEGA": "bodega",
+    "EDIFICIO": "edificio",
+    "DESCONOCIDO": "desconocido"
+}
+
+# Palabras clave con pesos
+PALABRAS_CLAVE = {
+    "casa_sola": {
+        # Términos directos (peso 5)
+        "casa sola": 5, "casa independiente": 5, "casa individual": 5,
+        "casa única": 5, "residencia independiente": 5,
+        "casa habitacion": 5, "casa habitación": 5,
+        "casa particular": 5, "casa unifamiliar": 5,
+        
+        # Términos indirectos (peso 3)
+        "casa propia": 3, "casa libre": 3, "casa independiente": 3,
+        "casa unica": 3, "casa familiar": 3
+    },
+    
+    "casa_condominio": {
+        # Términos directos (peso 5)
+        "casa en condominio": 5, "casa en privada": 5,
+        "casa en cluster": 5, "casa en coto": 5,
+        "casa en fraccionamiento": 5, "casa en conjunto": 5,
+        "condominio horizontal": 5, "casa/departamento en condominio": 5,
+        "casa/depto en condominio": 5,
+        
+        # Términos indirectos (peso 3)
+        "casa en residencial": 3, "casa en privado": 3,
+        "casa en cerrada": 3, "casa en coto privado": 3,
+        "casa/departamento": 3
+    },
+    
+    "departamento": {
+        # Términos directos (peso 5)
+        "departamento": 5, "depto": 5, "apartamento": 5,
+        "pent house": 5, "penthouse": 5, "loft": 5,
+        
+        # Términos indirectos (peso 3)
+        "flat": 3, "suite": 3, "condominio": 3,
+        "depa": 3, "dpto": 3
+    },
+    
+    "terreno": {
+        # Términos directos (peso 5)
+        "terreno": 5, "lote": 5, "predio": 5,
+        "terreno habitacional": 5, "terreno comercial": 5,
+        
+        # Términos indirectos (peso 3)
+        "solar": 3, "terreno urbano": 3, "terreno rustico": 3,
+        "terreno industrial": 3
+    },
+    
+    "local": {
+        # Términos directos (peso 5)
+        "local": 5, "local comercial": 5, "plaza comercial": 5,
+        "bodega comercial": 5, "oficina comercial": 5,
+        
+        # Términos indirectos (peso 3)
+        "comercio": 3, "espacio comercial": 3,
+        "local en plaza": 3, "local en renta": 3
+    },
+    
+    "oficina": {
+        # Términos directos (peso 5)
+        "oficina": 5, "despacho": 5, "consultorio": 5,
+        "suite ejecutiva": 5, "oficina corporativa": 5,
+        
+        # Términos indirectos (peso 3)
+        "espacio de trabajo": 3, "oficina amueblada": 3,
+        "oficina virtual": 3
+    },
+    
+    "bodega": {
+        # Términos directos (peso 5)
+        "bodega": 5, "almacén": 5, "almacen": 5,
+        "nave industrial": 5, "bodega industrial": 5,
+        
+        # Términos indirectos (peso 3)
+        "galpón": 3, "galpon": 3, "nave comercial": 3,
+        "espacio industrial": 3
+    },
+    
+    "edificio": {
+        # Términos directos (peso 5)
+        "edificio": 5, "inmueble completo": 5,
+        "construcción completa": 5, "edificio completo": 5,
+        
+        # Términos indirectos (peso 3)
+        "propiedad vertical": 3, "edificio comercial": 3,
+        "edificio de oficinas": 3, "edificio departamental": 3
+    }
+}
+
+class TipoPropiedadInvalido(Exception):
+    """Excepción para tipos de propiedad inválidos"""
+    pass
+
+def _normalizar_texto(texto: str) -> str:
+    """
+    Normaliza texto para análisis.
+    USO INTERNO ÚNICAMENTE.
+    """
+    if not texto:
+        return ""
+    
+    # Convertir a minúsculas y eliminar espacios extras
+    texto = texto.lower().strip()
+    texto = re.sub(r'\s+', ' ', texto)
+    
+    # Normalizar caracteres especiales
+    reemplazos = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ü': 'u', 'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i',
+        'ò': 'o', 'ù': 'u'
+    }
+    for k, v in reemplazos.items():
+        texto = texto.replace(k, v)
+    
+    return texto
+
+def _tiene_caracteristicas_vivienda(caracteristicas: Dict) -> bool:
+    """
+    Determina si las características indican una vivienda.
+    USO INTERNO ÚNICAMENTE.
+    """
+    return any([
+        caracteristicas.get("recamaras"),
+        caracteristicas.get("banos"),
+        caracteristicas.get("sala"),
+        caracteristicas.get("cocina"),
+        caracteristicas.get("comedor"),
+        caracteristicas.get("niveles", 0) > 0,
+        caracteristicas.get("tiene_planta_alta"),
+        caracteristicas.get("estacionamientos", {}).get("cantidad", 0) > 0,
+        caracteristicas.get("superficie_construida", 0) > 0
+    ])
+
+def detectar_tipo_propiedad(texto: str, caracteristicas: Optional[Dict] = None) -> Dict:
+    """
+    Detecta el tipo de propiedad basado en texto y características.
+    
+    Args:
+        texto: Texto a analizar
+        caracteristicas: Dict con características físicas
+        
+    Returns:
+        Dict con:
+        - tipo: str (uno de TIPOS_PROPIEDAD)
+        - confianza: float (0-1)
+        - evidencia: List[str]
+    """
+    resultado = {
+        "tipo": TIPOS_PROPIEDAD["DESCONOCIDO"],
+        "confianza": 0.0,
+        "evidencia": []
+    }
+    
+    if not texto:
+        return resultado
+        
+    texto_norm = _normalizar_texto(texto)
+    
+    # Detectar casos especiales primero
+    if "condominio horizontal" in texto_norm or "casa/departamento en condominio" in texto_norm:
+        resultado.update({
+            "tipo": "casa_condominio",
+            "confianza": 0.9,
+            "evidencia": ["Detectado explícitamente como casa en condominio horizontal"]
+        })
+        return resultado
+    
+    # Si tiene características de vivienda, limpiar menciones de terreno
+    if caracteristicas and _tiene_caracteristicas_vivienda(caracteristicas):
+        patrones_terreno = [
+            r"terreno[:\s]+\d+\s*m2",
+            r"\d+\s*m2\s+de\s+terreno",
+            r"terreno\s+(?:de|con)\s+\d+\s*m2",
+            r"terreno\s+amplio",
+            r"amplio\s+terreno",
+            r"terreno\s+en\s+venta",
+            r"venta\s+de\s+terreno"
+        ]
+        for patron in patrones_terreno:
+            texto_norm = re.sub(patron, "", texto_norm)
+        
+        resultado["evidencia"].append("Tiene características de vivienda")
+    
+    # Buscar coincidencias en palabras clave
+    pesos_por_tipo = {tipo: 0 for tipo in TIPOS_PROPIEDAD.values()}
+    evidencia_por_tipo = {tipo: [] for tipo in TIPOS_PROPIEDAD.values()}
+    
+    for tipo, palabras in PALABRAS_CLAVE.items():
+        for palabra, peso in palabras.items():
+            if palabra in texto_norm:
+                pesos_por_tipo[tipo] += peso
+                evidencia_por_tipo[tipo].append(f"'{palabra}' (+{peso})")
+    
+    # Encontrar el tipo con mayor peso
+    tipo_max = max(pesos_por_tipo.items(), key=lambda x: x[1])
+    
+    if tipo_max[1] > 0:
+        # Si es terreno pero hay evidencia de construcción, ignorarlo
+        if tipo_max[0] == "terreno" and caracteristicas:
+            if _tiene_caracteristicas_vivienda(caracteristicas):
+                # Buscar el siguiente tipo con mayor peso
+                pesos_por_tipo["terreno"] = 0
+                tipo_max = max(pesos_por_tipo.items(), key=lambda x: x[1])
+                resultado["evidencia"].append("Ignorado terreno por tener construcción")
+    
+        if tipo_max[1] > 0:
+            resultado.update({
+                "tipo": tipo_max[0],
+                "confianza": min(tipo_max[1] / 10, 1.0),
+                "evidencia": evidencia_por_tipo[tipo_max[0]]
+            })
+            return resultado
+    
+    # Si no se encontró un tipo claro pero hay características de vivienda
+    if caracteristicas and _tiene_caracteristicas_vivienda(caracteristicas):
+        if caracteristicas.get("tiene_planta_alta") or caracteristicas.get("niveles", 0) > 1:
+            resultado.update({
+                "tipo": TIPOS_PROPIEDAD["CASA_SOLA"],
+                "confianza": 0.7,
+                "evidencia": ["Tiene planta alta o múltiples niveles"]
+            })
+        else:
+            # Buscar indicadores de departamento
+            indicadores_depto = [
+                "piso", "elevador", "ascensor", "nivel", "planta",
+                "edificio", "torre", "condominio vertical"
+            ]
+            if any(ind in texto_norm for ind in indicadores_depto):
+                resultado.update({
+                    "tipo": TIPOS_PROPIEDAD["DEPARTAMENTO"],
+                    "confianza": 0.6,
+                    "evidencia": ["Indicadores de departamento encontrados"]
+                })
+            else:
+                resultado.update({
+                    "tipo": TIPOS_PROPIEDAD["CASA_SOLA"],
+                    "confianza": 0.5,
+                    "evidencia": ["Características de vivienda sin tipo específico"]
+                })
+    
+    return resultado
+
+def actualizar_tipo_propiedad(propiedad: Dict) -> Dict:
+    """
+    Actualiza el tipo de propiedad en una propiedad.
+    Esta es la función principal que otros módulos deben usar.
+    
+    Args:
+        propiedad: Dict con datos de la propiedad
+        
+    Returns:
+        Dict: Propiedad con tipo de propiedad actualizado
+    """
+    try:
+        # Extraer textos relevantes
+        textos = []
+        
+        # Priorizar título
+        if "titulo" in propiedad:
+            textos.append(propiedad["titulo"])
+        
+        # Agregar descripción original
+        if "descripcion_original" in propiedad:
+            textos.append(propiedad["descripcion_original"])
+        
+        # Agregar descripción procesada
+        if "descripcion" in propiedad:
+            textos.append(propiedad["descripcion"])
+        
+        # Combinar textos
+        texto_completo = " ".join(textos)
+        
+        # Detectar tipo de propiedad
+        resultado = detectar_tipo_propiedad(
+            texto_completo,
+            propiedad.get("caracteristicas", {})
+        )
+        
+        # Actualizar la propiedad
+        if "propiedad" not in propiedad:
+            propiedad["propiedad"] = {}
+            
+        propiedad["propiedad"]["tipo_propiedad"] = resultado
+        
+        return propiedad
+        
+    except Exception as e:
+        logger.error(f"Error actualizando tipo de propiedad: {str(e)}")
+        return propiedad
+
+def validar_tipo_propiedad(tipo: str) -> bool:
+    """
+    Valida si un tipo de propiedad es válido.
+    
+    Args:
+        tipo: Tipo de propiedad a validar
+        
+    Returns:
+        bool: True si es válido
+    """
+    return tipo.lower() in [t.lower() for t in TIPOS_PROPIEDAD.values()]
+
+def obtener_estadisticas(propiedades: List[Dict]) -> Dict:
+    """
+    Genera estadísticas sobre tipos de propiedad.
+    
+    Args:
+        propiedades: Lista de propiedades
+        
+    Returns:
+        Dict con estadísticas
+    """
+    stats = {
+        "total": len(propiedades),
+        "por_tipo": {t: 0 for t in TIPOS_PROPIEDAD.values()},
+        "confianza_promedio": 0,
+        "con_evidencia": 0
+    }
+    
+    confianza_total = 0
+    for prop in propiedades:
+        tipo_prop = prop.get("propiedad", {}).get("tipo_propiedad", {})
+        
+        # Contar por tipo
+        tipo = tipo_prop.get("tipo", TIPOS_PROPIEDAD["DESCONOCIDO"])
+        stats["por_tipo"][tipo] = stats["por_tipo"].get(tipo, 0) + 1
+        
+        # Acumular confianza
+        confianza = tipo_prop.get("confianza", 0)
+        confianza_total += confianza
+        
+        # Contar con evidencia
+        if tipo_prop.get("evidencia"):
+            stats["con_evidencia"] += 1
+    
+    # Calcular promedio de confianza
+    stats["confianza_promedio"] = confianza_total / len(propiedades) if propiedades else 0
+    
+    return stats 

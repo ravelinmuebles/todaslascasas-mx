@@ -1,0 +1,1792 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+procesa_datos_propiedades.py
+
+Script para procesar los datos crudos extraídos y generar el repositorio
+completo con todos los campos necesarios.
+"""
+
+import os
+import json
+from datetime import datetime
+from bs4 import BeautifulSoup
+import re
+import shutil
+
+# Constantes y rutas
+CARPETA_DATOS_CRUDOS = "resultados/datos_crudos"
+ARCHIVO_SALIDA = "resultados/propiedades_estructuradas.json"
+ARCHIVO_BACKUP = "resultados/propiedades_estructuradas.json.bak"
+ARCHIVO_REPOSITORIO = "resultados/repositorio_propiedades.json"
+CARPETA_REPO_MASTER = "resultados/repositorio_propiedades.json"
+
+def extraer_datos_html(contenido_json):
+    """Extrae datos del contenido JSON que contiene HTML"""
+    try:
+        # Parsear el JSON que contiene el HTML
+        datos_json = json.loads(contenido_json)
+        html_content = datos_json.get('html', '')
+        
+        # Crear el objeto BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Extraer datos
+        datos = {
+            "descripcion_original": "",
+            "ubicacion": {
+                "colonia": "",
+                "calle": "",
+                "estado": "Morelos",
+                "ciudad": "Cuernavaca",
+                "zona": "",
+                "ubicacion_referencia": "",
+                "puntos_interes": []
+            },
+            "propiedad": {
+                "tipo_propiedad": "No especificado",
+                "precio": "",
+                "mantenimiento": {
+                    "cuota_mantenimiento": "",
+                    "periodo": "",
+                    "incluye": []
+                },
+                "tipo_operacion": "No especificado",
+                "moneda": "MXN"
+            },
+            "descripcion": {
+                "caracteristicas": {
+                    "recamaras": 0,
+                    "banos": 0,
+                    "medio_bano": 0,
+                    "niveles": 1,
+                    "estacionamientos": 0,
+                    "edad": "",
+                    "recamara_planta_baja": False,
+                    "cisterna": {
+                        "tiene": False,
+                        "capacidad": ""
+                    },
+                    "superficie_m2": 0,
+                    "construccion_m2": 0
+                },
+                "amenidades": {
+                    "seguridad": False,
+                    "alberca": False,
+                    "patio": False,
+                    "bodega": False,
+                    "terraza": False,
+                    "jardin": False,
+                    "estudio": False,
+                    "roof_garden": False
+                },
+                "legal": {
+                    "escrituras": False,
+                    "cesion_derechos": False,
+                    "formas_de_pago": []
+                }
+            }
+        }
+
+        # Extraer descripción original
+        descripcion_div = soup.find('div', {'data-testid': 'marketplace-listing-item-description'})
+        if descripcion_div:
+            datos['descripcion_original'] = descripcion_div.get_text(strip=True)
+            desc_lower = datos['descripcion_original'].lower()
+
+            # Extraer tipo de propiedad
+            tipos_propiedad = {
+                'casa': ['casa sola', 'casa en condominio', 'casa'],
+                'departamento': ['departamento', 'depto', 'dpto'],
+                'terreno': ['terreno', 'lote'],
+                'local': ['local comercial', 'local'],
+                'oficina': ['oficina'],
+                'bodega comercial': ['bodega comercial', 'bodega']
+            }
+
+            for tipo, palabras in tipos_propiedad.items():
+                for palabra in palabras:
+                    if palabra in desc_lower:
+                        datos['propiedad']['tipo_propiedad'] = tipo
+                        break
+                if datos['propiedad']['tipo_propiedad'] != "No especificado":
+                    break
+
+            # Extraer tipo de operación
+            if 'venta' in desc_lower or 'se vende' in desc_lower:
+                datos['propiedad']['tipo_operacion'] = 'venta'
+            elif 'renta' in desc_lower or 'se renta' in desc_lower:
+                datos['propiedad']['tipo_operacion'] = 'renta'
+
+            # Extraer precio
+            precio_pattern = r'\$[\d,]+(?:\.?\d*)?(?:\s*(?:mil|millones|mdp))?'
+            precio_match = re.search(precio_pattern, datos['descripcion_original'])
+            if precio_match:
+                datos['propiedad']['precio'] = precio_match.group()
+
+            # Extraer características
+            patrones = {
+                'recamaras': [r'(\d+)\s*(?:rec[aá]mar|recam|rec|habitaci|cuart)',
+                             r'(?:rec[aá]mar|recam|rec|habitaci|cuart)[^\d]*(\d+)'],
+                'banos': [r'(\d+(?:\.\d+)?)\s*(?:ba[ñn]|wc)',
+                         r'(?:ba[ñn]|wc)[^\d]*(\d+(?:\.\d+)?)'],
+                'estacionamientos': [r'(\d+)\s*(?:estacionamiento|cochera|lugar|auto)',
+                                   r'(?:estacionamiento|cochera|lugar|auto)[^\d]*(\d+)'],
+                'superficie_m2': [r'(\d+)\s*(?:m2|metros|mt2)',
+                                r'(?:m2|metros|mt2)[^\d]*(\d+)'],
+                'construccion_m2': [r'(\d+)\s*(?:m2|metros|mt2)\s*(?:de\s*)?cons',
+                                  r'cons[^\d]*(\d+)\s*(?:m2|metros|mt2)']
+            }
+
+            for campo, patrones_campo in patrones.items():
+                for patron in patrones_campo:
+                    match = re.search(patron, desc_lower)
+                    if match:
+                        valor = float(match.group(1))
+                        if campo == 'banos':
+                            parte_entera = int(valor)
+                            parte_decimal = valor - parte_entera
+                            datos['descripcion']['caracteristicas']['banos'] = parte_entera
+                            if parte_decimal > 0:
+                                datos['descripcion']['caracteristicas']['medio_bano'] = 1
+                        else:
+                            datos['descripcion']['caracteristicas'][campo] = int(valor)
+                        break
+
+            # Extraer amenidades
+            amenidades = {
+                'seguridad': ['vigilancia', 'seguridad', 'caseta'],
+                'alberca': ['alberca', 'piscina'],
+                'patio': ['patio'],
+                'bodega': ['bodega'],
+                'terraza': ['terraza'],
+                'jardin': ['jardin', 'jardín'],
+                'estudio': ['estudio', 'oficina'],
+                'roof_garden': ['roof garden', 'rooftop', 'terraza']
+            }
+
+            for amenidad, palabras in amenidades.items():
+                for palabra in palabras:
+                    if palabra in desc_lower:
+                        datos['descripcion']['amenidades'][amenidad] = True
+                        break
+
+            # Extraer información legal
+            legal = {
+                'escrituras': ['escrituras', 'escriturada'],
+                'cesion_derechos': ['cesión de derechos', 'cesion de derechos']
+            }
+
+            for campo, palabras in legal.items():
+                for palabra in palabras:
+                    if palabra in desc_lower:
+                        datos['descripcion']['legal'][campo] = True
+                        break
+
+            # Extraer formas de pago
+            formas_pago = ['contado', 'crédito', 'credito', 'infonavit', 'fovissste', 'bancario']
+            for forma in formas_pago:
+                if forma in desc_lower:
+                    datos['descripcion']['legal']['formas_de_pago'].append(forma)
+
+            # Extraer ubicación
+            ubicacion_patterns = {
+                'colonia': [r'col(?:onia)?\.?\s+([^,\.]+)', r'fracc(?:ionamiento)?\.?\s+([^,\.]+)'],
+                'calle': [r'calle\s+([^,\.]+)'],
+                'zona': [r'zona\s+([^,\.]+)']
+            }
+
+            for campo, patterns in ubicacion_patterns.items():
+                for pattern in patterns:
+                    if match := re.search(pattern, desc_lower):
+                        datos['ubicacion'][campo] = match.group(1).strip().title()
+                        break
+
+        return datos
+
+    except Exception as e:
+        print(f"Error al procesar HTML: {str(e)}")
+        return None
+
+def procesar_datos_crudos():
+    """
+    Procesa los datos crudos de propiedades y genera un archivo JSON estructurado.
+    """
+    # Cargar repositorio maestro
+    repo_master = {}
+    if os.path.exists(CARPETA_REPO_MASTER):
+        with open(CARPETA_REPO_MASTER, 'r', encoding='utf-8') as f:
+            repo_master = json.load(f)
+    
+    # Estructura para almacenar propiedades procesadas
+    propiedades_estructuradas = {
+        "fecha_procesamiento": datetime.now().isoformat(),
+        "total_propiedades": 0,
+        "propiedades": []
+    }
+    
+    # Procesar cada propiedad
+    for pid, datos in repo_master.items():
+        try:
+            propiedad_procesada = {
+                "id": pid,
+                "link": datos.get("link", ""),
+                "titulo": datos.get("titulo", ""),
+                "descripcion": datos.get("descripcion", ""),
+                "precio_str": datos.get("precio", ""),
+                "precio_num": 0,
+                "tipo_operacion": datos.get("tipo_operacion", "Desconocido"),
+                "ubicacion": datos.get("ubicacion", {}),
+                "caracteristicas": datos.get("caracteristicas", {}),
+                "vendedor": datos.get("vendedor", ""),
+                "link_vendedor": datos.get("link_vendedor", ""),
+                "imagen_portada": datos.get("imagen_portada", ""),
+                "dom_file": datos.get("dom_file", "")
+            }
+            
+            # Validar y normalizar los datos
+            propiedad_procesada = validar_y_normalizar_datos(propiedad_procesada)
+            
+            # Agregar a la lista de propiedades
+            propiedades_estructuradas["propiedades"].append(propiedad_procesada)
+            
+        except Exception as e:
+            print(f"Error procesando propiedad {pid}: {str(e)}")
+            continue
+    
+    # Actualizar total
+    propiedades_estructuradas["total_propiedades"] = len(propiedades_estructuradas["propiedades"])
+    
+    # Guardar resultados
+    with open('resultados/propiedades_estructuradas.json', 'w', encoding='utf-8') as f:
+        json.dump(propiedades_estructuradas, f, ensure_ascii=False, indent=2)
+    
+    print(f"Procesamiento completado. Total de propiedades: {propiedades_estructuradas['total_propiedades']}")
+    
+def extraer_zona(texto):
+    """
+    Extrae la zona o colonia mencionada en el texto.
+    """
+    texto = normalizar_texto(texto)
+    
+    # Patrones para detectar zonas/colonias
+    patrones = [
+        r'(?:en|ubicad[oa] en)\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:cerca|junto|proximo|a\s+(?:\d+\s+)?min(?:utos)?|sobre|por|entre|cuernavaca|morelos))',
+        r'col(?:onia)?\.?\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:cerca|junto|proximo|a\s+(?:\d+\s+)?min(?:utos)?|sobre|por|entre|cuernavaca|morelos))',
+        r'fracc(?:ionamiento)?\.?\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:cerca|junto|proximo|a\s+(?:\d+\s+)?min(?:utos)?|sobre|por|entre|cuernavaca|morelos))',
+        r'unidad\s+hab(?:itacional)?\.?\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:cerca|junto|proximo|a\s+(?:\d+\s+)?min(?:utos)?|sobre|por|entre|cuernavaca|morelos))',
+        r'barrio\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:cerca|junto|proximo|a\s+(?:\d+\s+)?min(?:utos)?|sobre|por|entre|cuernavaca|morelos))',
+        r'residencial\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:cerca|junto|proximo|a\s+(?:\d+\s+)?min(?:utos)?|sobre|por|entre|cuernavaca|morelos))'
+    ]
+    
+    # Palabras que no deben ser parte del nombre de la zona
+    palabras_invalidas = [
+        'venta', 'renta', 'precio', 'cerca', 'junto', 'proximo', 'minutos',
+        'sobre', 'entre', 'casa', 'depto', 'departamento', 'terreno',
+        'infonavit', 'credito', 'banco', 'recurso', 'propio', 'acepto',
+        'aceptamos', 'contado', 'sala', 'comedor', 'cocina', 'recamara',
+        'recamaras', 'bano', 'banos', 'estacionamiento', 'garage',
+        'cuernavaca', 'morelos'
+    ]
+    
+    for patron in patrones:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            zona = match.group(1).strip()
+            # Limpiar palabras comunes que no son parte del nombre
+            palabras_a_eliminar = ['en', 'la', 'el', 'los', 'las', 'de', 'del', 'y', 'con']
+            for palabra in palabras_a_eliminar:
+                zona = re.sub(r'\b' + palabra + r'\b', '', zona, flags=re.IGNORECASE)
+            
+            # Eliminar palabras inválidas
+            for palabra in palabras_invalidas:
+                zona = re.sub(r'\b' + palabra + r'\b', '', zona, flags=re.IGNORECASE)
+            
+            zona = ' '.join(zona.split())  # Eliminar espacios múltiples
+            if len(zona) > 3 and not any(palabra in zona.lower() for palabra in palabras_invalidas):
+                return zona.title()  # Convertir a formato título (primera letra mayúscula)
+    
+    return ""
+
+def convertir_precio_texto_a_numero(texto_precio):
+    """
+    Convierte un texto de precio en formato mexicano a un número.
+    Ejemplos:
+    $1.234.567 -> 1234567
+    $1.234.567,00 -> 1234567
+    $1,234,567 -> 1234567
+    $1,234,567.00 -> 1234567
+    """
+    if not texto_precio:
+        return 0.0
+    
+    # Limpiar el texto
+    numero = texto_precio.replace('$', '').strip()
+    
+    try:
+        # Caso especial: formato mexicano con puntos como separadores de miles
+        if '.' in numero:
+            # Remover la parte decimal si existe
+            if ',' in numero:
+                numero = numero.split(',')[0]
+            # Si termina en .000, removerlo
+            if numero.endswith('.000'):
+                numero = numero[:-4]
+            # Juntar los números separados por puntos
+            partes = numero.split('.')
+            # Si hay más de una parte y la última tiene 3 dígitos, es separador de miles
+            if len(partes) > 1 and len(partes[-1]) == 3:
+                valor = float(''.join(partes))
+            else:
+                # Tratar como número decimal normal
+                valor = float(numero)
+            return valor
+        
+        # Caso especial: formato con comas como separadores de miles
+        if ',' in numero:
+            # Remover la parte decimal si existe
+            if '.' in numero:
+                numero = numero.split('.')[0]
+            # Si termina en ,000, removerlo
+            if numero.endswith(',000'):
+                numero = numero[:-4]
+            # Juntar los números separados por comas
+            partes = numero.split(',')
+            # Si hay más de una parte y la última tiene 3 dígitos, es separador de miles
+            if len(partes) > 1 and len(partes[-1]) == 3:
+                valor = float(''.join(partes))
+            else:
+                # Tratar como número decimal normal
+                valor = float(numero.replace(',', '.'))
+            return valor
+        
+        # Si es un número simple
+        return float(numero)
+    except:
+        return 0.0
+
+def extraer_precio(texto, datos=None):
+    """
+    Extrae el precio de la propiedad con varios formatos posibles.
+    Retorna un diccionario con el valor numérico y el formato para mostrar.
+    """
+    # Valores por defecto
+    precio_default = {
+        "valor": 0.0,
+        "formato": "$0",
+        "moneda": "MXN",
+        "confianza": 0.0,
+        "mensaje": "No se encontró precio",
+        "fuente": "ninguna"
+    }
+    
+    # Si tenemos datos del repositorio original, usar ese precio directamente
+    if datos and isinstance(datos, dict):
+        precio_original = datos.get('precio', '')
+        if precio_original:
+            # Limpiar el precio original
+            precio_limpio = str(precio_original).replace('$', '').replace(' ', '').strip()
+            # Convertir el precio a número
+            try:
+                # Caso 1: Formato con puntos como separadores (ej: 3.300.000)
+                if precio_limpio.count('.') > 1:
+                    valor = float(''.join(precio_limpio.split('.')))
+                    return {
+                        "valor": valor,
+                        "formato": precio_original,  # Mantener el formato original exacto
+                        "moneda": "MXN",
+                        "confianza": 1.0,  # Máxima confianza por venir del repositorio
+                        "mensaje": "Precio del repositorio original",
+                        "fuente": "repositorio"
+                    }
+                # Caso 2: Formato con comas como separadores (ej: 3,300,000)
+                elif precio_limpio.count(',') > 1:
+                    valor = float(''.join(precio_limpio.split(',')))
+                    return {
+                        "valor": valor,
+                        "formato": precio_original,
+                        "moneda": "MXN",
+                        "confianza": 1.0,
+                        "mensaje": "Precio del repositorio original",
+                        "fuente": "repositorio"
+                    }
+                # Caso 3: Un solo separador decimal
+                elif '.' in precio_limpio:
+                    valor = float(precio_limpio)
+                    return {
+                        "valor": valor,
+                        "formato": precio_original,
+                        "moneda": "MXN",
+                        "confianza": 1.0,
+                        "mensaje": "Precio del repositorio original",
+                        "fuente": "repositorio"
+                    }
+                elif ',' in precio_limpio:
+                    valor = float(precio_limpio.replace(',', '.'))
+                    return {
+                        "valor": valor,
+                        "formato": precio_original,
+                        "moneda": "MXN",
+                        "confianza": 1.0,
+                        "mensaje": "Precio del repositorio original",
+                        "fuente": "repositorio"
+                    }
+                # Caso 4: Número simple
+                else:
+                    valor = float(precio_limpio)
+                    return {
+                        "valor": valor,
+                        "formato": precio_original,
+                        "moneda": "MXN",
+                        "confianza": 1.0,
+                        "mensaje": "Precio del repositorio original",
+                        "fuente": "repositorio"
+                    }
+            except Exception as e:
+                print(f"Error procesando precio original '{precio_original}': {str(e)}")
+    
+    # Si no se pudo procesar el precio del repositorio, intentar extraerlo del texto
+    def extraer_matches(texto):
+        """Extrae todos los posibles matches de precio del texto"""
+        patrones = [
+            # Millones con decimales (alta confianza)
+            (r'\$?\s*(\d+(?:[.,]\d+)?)\s*millones?(?!\s*%)', 'millones', 0.95),
+            (r'\$?\s*(\d+(?:[.,]\d+)?)\s*mdp(?!\s*%)', 'millones', 0.95),
+            
+            # Miles con decimales (alta confianza)
+            (r'\$?\s*(\d+(?:[.,]\d+)?)\s*mil(?!\s*%)', 'miles', 0.9),
+            
+            # Formato con puntos o comas como separadores (confianza media-alta)
+            (r'\$\s*([\d.,]+)(?:\.000)?(?!\s*%)', 'normal', 0.85),
+            
+            # Precio después de palabras clave (confianza media)
+            (r'(?:precio|costo|valor|venta)\s*(?:de|:)?\s*\$?\s*([\d.,]+)', 'normal', 0.8),
+            
+            # Números sueltos que parecen precios (confianza baja)
+            (r'(?<!\d)\$?\s*([\d.,]+)(?:\s*(?:pesos|mxn))?(?!\s*%)', 'normal', 0.7)
+        ]
+        
+        matches = []
+        for patron, tipo, confianza_base in patrones:
+            for match in re.finditer(patron, texto, re.IGNORECASE):
+                matches.append({
+                    'texto': match.group(1),
+                    'tipo': tipo,
+                    'confianza_base': confianza_base,
+                    'posicion': match.start()
+                })
+        return matches
+    
+    # Normalizar texto y detectar tipo de operación
+    texto = normalizar_texto(texto)
+    tipo_operacion = detectar_tipo_operacion(texto)
+    
+    # Extraer todos los posibles matches
+    matches = extraer_matches(texto)
+    
+    # Procesar cada match y quedarnos con el mejor
+    mejor_precio = None
+    mejor_confianza = 0
+    mejor_mensaje = None
+    
+    for match in matches:
+        if valor := procesar_numero_mexicano(match['texto']):
+            # Aplicar multiplicador según el tipo
+            if match['tipo'] == 'millones':
+                valor = valor * 1_000_000
+            elif match['tipo'] == 'miles':
+                valor = valor * 1_000
+            
+            es_valido, confianza, mensaje = validar_precio(valor, tipo_operacion)
+            if es_valido:
+                confianza_total = match['confianza_base'] * confianza_precio
+                
+                # Ajustar confianza por posición en el texto
+                if match['posicion'] < len(texto) // 2:
+                    confianza_total *= 1.1  # Mayor confianza si aparece al principio
+                
+                if confianza_total > mejor_confianza:
+                    mejor_precio = valor
+                    mejor_confianza = confianza_total
+                    mejor_mensaje = mensaje
+    
+    if mejor_precio is not None:
+        return {
+            "valor": mejor_precio,
+            "formato": "${:,.0f}".format(mejor_precio),
+            "moneda": "MXN",
+            "confianza": mejor_confianza,
+            "mensaje": mejor_mensaje,
+            "fuente": "texto"
+        }
+    
+    return precio_default
+
+def detectar_tipo_operacion(texto, precio=None):
+    """
+    Detecta el tipo de operación (Venta/Renta) basado en el texto y el precio.
+    """
+    texto = normalizar_texto(texto)
+    
+    # Palabras clave ampliadas
+    renta_keywords = [
+        'renta', 'alquiler', '/mes', 'mensual', 'rentar',
+        'arrendamiento', 'arriendo', 'mensualidad', 'rento',
+        'se renta', 'en renta', 'para rentar', 'rentamos'
+    ]
+    venta_keywords = [
+        'venta', 'se vende', 'remato', 'vendo', 'oportunidad de compra',
+        'precio de venta', 'vende', 'vendemos', 'en venta',
+        'para vender', 'precio de contado', 'oferta de venta'
+    ]
+    
+    # Verificar por palabras clave
+    if any(k in texto for k in renta_keywords):
+        return "Renta"
+    if any(k in texto for k in venta_keywords):
+        return "Venta"
+        
+    # Análisis por precio si está disponible
+    if precio and precio > 0:
+        if precio < 100_000:
+            return "Renta"
+        if precio > 500_000:
+            return "Venta"
+    
+    # Análisis por patrones de precio en texto
+    precio_patterns = {
+        'Renta': [
+            r'\$?\s*\d{1,3}(?:[.,]\d{3})*\s*(?:al\s+mes|mensual|por\s+mes)',
+            r'\d{3,4}\s*(?:al\s+mes|mensual|por\s+mes)',
+            r'mensualidad(?:\s+de)?\s*\$?\s*\d{3,4}'
+        ],
+        'Venta': [
+            r'\$?\s*\d{6,}',
+            r'\d{1,2}\s*millones',
+            r'precio\s+(?:de\s+)?contado',
+            r'acepto\s+credito'
+        ]
+    }
+    
+    for tipo, patterns in precio_patterns.items():
+        if any(re.search(p, texto, re.IGNORECASE) for p in patterns):
+            return tipo
+    
+    return "Desconocido"
+
+def normalizar_texto(texto):
+    """
+    Normaliza un texto eliminando caracteres especiales y convirtiendo a minúsculas.
+    """
+    if not texto or not isinstance(texto, str):
+        return ""
+    
+    # Convertir a minúsculas y quitar espacios extras
+    texto = texto.lower().strip()
+    
+    # Reemplazar caracteres especiales
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ü': 'u', 'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i',
+        'ò': 'o', 'ù': 'u', 'ä': 'a', 'ë': 'e', 'ï': 'i',
+        'ö': 'o', 'ü': 'u'
+    }
+    
+    for old, new in replacements.items():
+        texto = texto.replace(old, new)
+    
+    # Normalizar caracteres especiales de medidas
+    texto = texto.replace('²', '2')  # Normalizar el superíndice ²
+    texto = texto.replace('m2', 'm²')  # Normalizar m2 a m²
+    texto = texto.replace('mt2', 'm²')  # Normalizar mt2 a m²
+    texto = texto.replace('mts2', 'm²')  # Normalizar mts2 a m²
+    
+    return texto
+
+def procesar_texto(texto, datos):
+    """Procesa el texto para extraer características"""
+    if not texto or not isinstance(texto, str):
+        texto = ""
+    
+    caracteristicas = {
+        'recamaras': None,
+        'banos': None,
+        "niveles": None,
+        'es_un_nivel': False,
+        'superficie_m2': None,
+        'construccion_m2': None,
+        'recamara_pb': False,
+        'cisterna': False,
+        'capacidad_cisterna': None,
+        'apto_discapacitados': False,
+        'estacionamientos': None,
+        'edad': None
+    }
+    
+    texto = normalizar_texto(texto)
+    
+    # Extraer superficie y construcción
+    medidas = extraer_superficie_y_construccion(texto)
+    caracteristicas['superficie_m2'] = medidas['superficie_m2']
+    caracteristicas['construccion_m2'] = medidas['construccion_m2']
+    
+    # Extraer recámaras
+    patrones_recamaras = [
+        r'(\d+)\s*(?:recamaras?|recámaras?|rec|habitaciones?|dormitorios?)',
+        r'(?:recamaras?|recámaras?|rec|habitaciones?|dormitorios?)\s*(?::|con)?\s*(\d+)'
+    ]
+    for patron in patrones_recamaras:
+        if match := re.search(patron, texto):
+            try:
+                caracteristicas['recamaras'] = int(match.group(1))
+                break
+            except:
+                continue
+    
+    # Detectar niveles y si es de un nivel
+    patrones_un_nivel = [
+        r'(?:casa|propiedad|inmueble)\s*(?:nueva\s+)?(?:en\s+)?(?:venta\s+)?(?:de|en|con)\s*(?:un|1)\s*nivel',
+        r'(?:de|en|con)\s*(?:un|1)\s*nivel',
+        r'un\s*nivel',
+        r'una\s*planta',
+        r'planta\s*baja'
+    ]
+    
+    if any(re.search(patron, texto, re.IGNORECASE) for patron in patrones_un_nivel):
+        caracteristicas['es_un_nivel'] = True
+        caracteristicas['niveles'] = 1
+    else:
+        # Buscar otros números de niveles
+        patrones_niveles = [
+            r'(\d+)\s*(?:niveles?|pisos?)',
+            r'(?:niveles?|pisos?)\s*(?::|con)?\s*(\d+)'
+        ]
+        for patron in patrones_niveles:
+            if match := re.search(patron, texto):
+                try:
+                    caracteristicas['niveles'] = int(match.group(1))
+                    break
+                except:
+                    continue
+    
+    # Extraer baños
+    total_banos = 0
+    banos_recamaras = 0
+    banos_servicio = 0
+    banos_visitas = 0
+    
+    # Detectar baños de recámaras
+    if caracteristicas['recamaras'] and re.search(r'cada\s*(?:uno|una|recamara|habitacion)\s*con\s*(?:su\s*)?(?:propio\s*)?baño', texto):
+        banos_recamaras = caracteristicas['recamaras']
+    
+    # Detectar baño de servicio
+    if re.search(r'(?:cuarto|habitacion|area)\s*(?:de)?\s*servicio\s*con\s*baño', texto):
+        banos_servicio = 1
+    
+    # Detectar baño de visitas
+    if re.search(r'baño\s*(?:de)?\s*visitas?', texto):
+        banos_visitas = 1
+    
+    # Sumar todos los baños encontrados
+    total_banos = banos_recamaras + banos_servicio + banos_visitas
+    
+    # Si no se encontraron baños por el método detallado, buscar número total
+    if total_banos == 0:
+        patrones_banos = [
+            r'(?<!\d)(\d+)\s*(?:baños?|banos?|wc)(?!\s*(?:mil|millones|mdp|m2|m3|litros|metros))',
+            r'(?:baños?|banos?|wc)\s*(?::|con)?\s*(?<!\d)(\d+)(?!\s*(?:mil|millones|mdp|m2|m3|litros|metros))'
+        ]
+        for patron in patrones_banos:
+            if match := re.search(patron, texto):
+                try:
+                    num = int(match.group(1))
+                    if 0 < num <= 10:  # Validación para números razonables
+                        total_banos = num
+                        break
+                except:
+                    continue
+    
+    if total_banos > 0:
+        caracteristicas['banos'] = total_banos
+    
+    # Detectar recámara en planta baja
+    if any(x in texto for x in ['recamara en pb', 'recámara en planta baja', 'dormitorio en pb']):
+        caracteristicas['recamara_pb'] = True
+    
+    # Detectar cisterna y su capacidad
+    if 'cisterna' in texto:
+        caracteristicas['cisterna'] = True
+        # Buscar capacidad de la cisterna
+        patrones_cisterna = [
+            r'cisterna\s*(?:de)?\s*(\d+)\s*(?:m3|metros?3?|litros?)',
+            r'cisterna\s*(?:de)?\s*(\d+)(?:,\d+)?\s*(?:m3|metros?3?|litros?)',
+            r'cisterna\s*(?:de)?\s*(\d+)\s*mil\s*(?:m3|metros?3?|litros?)'
+        ]
+        for patron in patrones_cisterna:
+            if match := re.search(patron, texto):
+                try:
+                    capacidad = match.group(1)
+                    if 'mil' in match.group():
+                        capacidad = int(capacidad) * 1000
+                    else:
+                        capacidad = int(capacidad)
+                    caracteristicas['capacidad_cisterna'] = capacidad
+                    break
+                except:
+                    continue
+    
+    # Extraer estacionamientos
+    caracteristicas['estacionamientos'] = extraer_estacionamientos(texto)
+    
+    # Extraer zona
+    zona = extraer_zona(texto)
+    
+    # Extraer precio y tipo de operación
+    precio_info = extraer_precio(texto, datos)
+    tipo_operacion = detectar_tipo_operacion(texto) or "Desconocido"
+    
+    # Determinar tipo de propiedad
+    tipo_propiedad = "Otro"
+    tipos = {
+        'Casa': ['casa', 'residencia', 'chalet'],
+        'Departamento': ['departamento', 'depto', 'dpto', 'apartamento'],
+        'Terreno': ['terreno', 'lote', 'predio'],
+        'Local': ['local', 'comercial'],
+        'Oficina': ['oficina', 'despacho'],
+        'Bodega': ['bodega', 'almacén']
+    }
+    
+    for tipo, palabras in tipos.items():
+        if any(palabra in texto for palabra in palabras):
+            tipo_propiedad = tipo
+            break
+    
+    # Obtener datos de ubicación del objeto original si están disponibles
+    ubicacion = {
+        "colonia": datos.get('ubicacion', {}).get('colonia', ''),
+        "calle": datos.get('ubicacion', {}).get('calle', ''),
+        "estado": datos.get('ubicacion', {}).get('estado', 'Morelos'),
+        "ciudad": datos.get('ubicacion', {}).get('ciudad', 'Cuernavaca'),
+        "referencias": datos.get('ubicacion', {}).get('referencias', ''),
+        "zona": zona or extraer_fraccionamiento(texto)  # Intentar extraer fraccionamiento si no hay zona
+    }
+    
+    return {
+        "id": datos.get('id', ''),
+        "link": datos.get('link', ''),
+        "descripcion": texto,
+        "ubicacion": ubicacion,
+        "propiedad": {
+            "tipo_propiedad": tipo_propiedad,
+            "precio": precio_info,
+            "tipo_operacion": tipo_operacion
+        },
+        "descripcion_detallada": {
+            "caracteristicas": caracteristicas,
+            "amenidades": extraer_amenidades(texto),
+            "legal": extraer_legal(texto)
+        },
+        "metadata": {
+            "fecha_extraccion": datos.get('fecha_extraccion', datetime.now().isoformat()),
+            "fecha_procesamiento": datetime.now().isoformat()
+        }
+    }
+
+def extraer_superficie_y_construccion(texto):
+    """
+    Extrae la superficie total y construida del texto.
+    """
+    resultado = {
+        "superficie_m2": None,
+        "construccion_m2": None
+    }
+    
+    # Patrones para superficie total
+    patrones_superficie = [
+        # Patrones básicos
+        r'(?:superficie|terreno|lote)(?:\s+de)?:?\s*(\d+)\s*(?:m²|m2|metros?|mt2|mts2?)',
+        r'(\d+)\s*(?:m²|m2|metros?|mt2|mts2?)\s*(?:de\s*terreno|superficie)',
+        
+        # Patrones con dimensiones
+        r'(\d+)\s*x\s*(\d+)\s*(?:m²|m2|metros?)?',
+        r'(\d+)\s*por\s*(\d+)\s*(?:m²|m2|metros?)?',
+        
+        # Patrones con punto decimal
+        r'(?:superficie|terreno|lote)(?:\s+de)?:?\s*(\d+\.\d+)\s*(?:m²|m2|metros?|mt2|mts2?)',
+        r'(\d+\.\d+)\s*(?:m²|m2|metros?|mt2|mts2?)\s*(?:de\s*terreno|superficie)'
+    ]
+    
+    # Patrones para construcción
+    patrones_construccion = [
+        # Patrones básicos
+        r'(?:construccion|construcción)(?:\s+de)?:?\s*(\d+)\s*(?:m²|m2|metros?|mt2|mts2?)',
+        r'(\d+)\s*(?:m²|m2|metros?|mt2|mts2?)\s*(?:de\s*construccion|de\s*construcción)',
+        
+        # Patrones con punto decimal
+        r'(?:construccion|construcción)(?:\s+de)?:?\s*(\d+\.\d+)\s*(?:m²|m2|metros?|mt2|mts2?)',
+        r'(\d+\.\d+)\s*(?:m²|m2|metros?|mt2|mts2?)\s*(?:de\s*construccion|de\s*construcción)'
+    ]
+    
+    # Buscar superficie
+    for patron in patrones_superficie:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                # Si es un patrón de dimensiones (largo x ancho)
+                if 'x' in patron or 'por' in patron:
+                    largo = float(match.group(1))
+                    ancho = float(match.group(2))
+                    resultado["superficie_m2"] = int(largo * ancho)
+                else:
+                    resultado["superficie_m2"] = int(float(match.group(1)))
+                break
+            except:
+                continue
+    
+    # Buscar construcción
+    for patron in patrones_construccion:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                resultado["construccion_m2"] = int(float(match.group(1)))
+                break
+            except:
+                continue
+    
+    return resultado
+
+def extraer_amenidades(texto):
+    """
+    Extrae las amenidades mencionadas en el texto.
+    """
+    amenidades = []
+    
+    # Mapeo de amenidades y sus palabras clave
+    mapeo_amenidades = {
+        'seguridad': ['vigilancia', 'seguridad', 'caseta', 'privada', 'vigilante', 'seguridad 24/7', 'control de acceso'],
+        'alberca': ['alberca', 'piscina', 'pool', 'chapoteadero', 'area de nado'],
+        'jardin': ['jardin', 'jardín', 'área verde', 'area verde', 'jardinado', 'jardinada'],
+        'terraza': ['terraza', 'balcón', 'balcon', 'deck', 'patio'],
+        'estacionamiento': ['cochera', 'estacionamiento', 'parking', 'garage', 'garaje', 'cajon', 'lugar de auto'],
+        'bodega': ['bodega', 'storage', 'cuarto de servicio', 'almacen'],
+        'roof_garden': ['roof garden', 'rooftop', 'terraza en azotea', 'sky garden', 'azotea verde'],
+        'gimnasio': ['gym', 'gimnasio', 'area de ejercicio', 'área de ejercicio'],
+        'area_comun': ['área común', 'area comun', 'areas comunes', 'áreas comunes', 'salon de usos multiples'],
+        'juegos_infantiles': ['juegos infantiles', 'área de juegos', 'area de juegos', 'playground', 'parque infantil'],
+        'salon_eventos': ['salón', 'salon', 'eventos', 'fiestas', 'salon de usos multiples'],
+        'elevador': ['elevador', 'ascensor', 'lift'],
+        'aire_acondicionado': ['aire acondicionado', 'a/c', 'clima', 'minisplit', 'climatizacion'],
+        'amueblado': ['amueblado', 'equipado', 'línea blanca', 'linea blanca', 'cocina equipada'],
+        'cocina_integral': ['cocina integral', 'cocina equipada', 'cocina completa'],
+        'calentador_solar': ['calentador solar', 'paneles solares', 'energia solar'],
+        'cisterna': ['cisterna', 'aljibe', 'almacenamiento de agua'],
+        'internet': ['internet', 'wifi', 'conexion a internet'],
+        'gas_natural': ['gas natural', 'gas estacionario'],
+        'hidroneumatico': ['hidroneumatico', 'hidro', 'bomba de agua', 'presurizador'],
+        'tinaco': ['tinaco', 'deposito de agua'],
+        'closets': ['closets', 'closet', 'vestidor', 'walk in closet'],
+        'bar': ['bar', 'cantina', 'cava'],
+        'estudio': ['estudio', 'oficina', 'biblioteca', 'home office']
+    }
+    
+    texto = normalizar_texto(texto)
+    
+    # Buscar cada amenidad en el texto
+    for amenidad, palabras_clave in mapeo_amenidades.items():
+        if any(palabra in texto for palabra in palabras_clave):
+            amenidades.append(amenidad)
+    
+    return sorted(amenidades)  # Ordenar alfabéticamente para consistencia
+
+def extraer_legal(texto):
+    """
+    Extrae información legal y formas de pago aceptadas.
+    """
+    resultado = {
+        "escrituras": False,
+        "cesion_derechos": False,
+        "creditos_disponibles": [],
+        "estado_juridico": "regular"
+    }
+    
+    texto = normalizar_texto(texto)
+    
+    # Verificar escrituras
+    if any(x in texto for x in ['escrituras', 'escriturada', 'titulo de propiedad']):
+        resultado["escrituras"] = True
+    
+    # Verificar cesión de derechos
+    if any(x in texto for x in ['cesion de derechos', 'cesión de derechos', 'traspaso']):
+        resultado["cesion_derechos"] = True
+        resultado["estado_juridico"] = "cesion_derechos"
+    
+    # Verificar créditos disponibles
+    creditos = {
+        'infonavit': ['infonavit', 'info'],
+        'fovissste': ['fovissste', 'fovi'],
+        'bancario': ['credito bancario', 'banco', 'hipoteca'],
+        'contado': ['contado', 'efectivo'],
+        'financiamiento': ['financiamiento', 'credito']
+    }
+    
+    for credito, palabras in creditos.items():
+        if any(palabra in texto for palabra in palabras):
+            resultado["creditos_disponibles"].append(credito)
+    
+    # Verificar estado jurídico
+    if any(x in texto for x in ['intestado', 'intestada', 'juicio']):
+        resultado["estado_juridico"] = "irregular"
+    elif any(x in texto for x in ['embargo', 'embargada']):
+        resultado["estado_juridico"] = "embargo"
+    
+    return resultado
+
+def extraer_estacionamientos(texto):
+    """
+    Extrae el número de estacionamientos mencionados en el texto.
+    """
+    texto = normalizar_texto(texto)
+    
+    # Patrones para estacionamientos
+    patrones = [
+        # Patrones numéricos explícitos
+        r'(?:garaje|garage|estacionamiento|cochera)\s*(?:para|con|de)?\s*(\d+)\s*(?:autos?|carros?|coches?|vehiculos?)',
+        r'(\d+)\s*(?:autos?|carros?|coches?|vehiculos?)\s*(?:en)?\s*(?:garaje|garage|estacionamiento|cochera)',
+        r'(\d+)\s*(?:estacionamientos?|cajone?s?|lugares?\s*(?:de\s*)?(?:estacionamiento|auto)|cocheras?)',
+        r'(?:estacionamiento|cajon|lugar|cochera)(?:es)?\s*(?:para|con|de)?\s*(\d+)(?:\s*autos?)?',
+        
+        # Patrones con números escritos
+        r'(?:un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:estacionamientos?|cajone?s?|lugares?\s*(?:de\s*)?(?:estacionamiento|auto)|cocheras?)',
+        
+        # Patrones específicos
+        r'estacionamiento\s*(?:para|con|de)\s*(?:un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:auto|carro|coche|vehiculo)',
+        r'cochera\s*(?:para|con|de)\s*(?:un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:auto|carro|coche|vehiculo)'
+    ]
+    
+    # Mapeo de números escritos a dígitos
+    numeros_escritos = {
+        'un': 1, 'uno': 1, 'dos': 2, 'tres': 3, 'cuatro': 4,
+        'cinco': 5, 'seis': 6, 'siete': 7, 'ocho': 8,
+        'nueve': 9, 'diez': 10
+    }
+    
+    for patron in patrones:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                # Si es un número escrito
+                numero = match.group(1) if match.group(1).isdigit() else match.group(0)
+                for num_escrito, valor in numeros_escritos.items():
+                    if num_escrito in numero.lower():
+                        return valor
+                # Si es un número en dígitos
+                num = int(match.group(1))
+                if 0 < num <= 10:  # Validación para evitar confusiones con porcentajes
+                    return num
+            except:
+                continue
+    
+    # Si no se encontró un número específico pero hay menciones de estacionamiento
+    if any(palabra in texto for palabra in ['estacionamiento', 'cochera', 'garage', 'cajon']):
+        return 1
+    
+    return None
+
+def extraer_fraccionamiento(texto):
+    """
+    Extrae el nombre del fraccionamiento si está mencionado.
+    """
+    texto = normalizar_texto(texto)
+    
+    # Patrones para fraccionamientos
+    patrones = [
+        r'(?:fraccionamiento|fracc|coto|cluster|privada|residencial)\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:con|cerca|junto|proximo|sobre|por|entre|cuernavaca|morelos))',
+        r'(?:en|dentro\s+de)\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?:\s+(?:con|cerca|junto|proximo|sobre|por|entre|cuernavaca|morelos))'
+    ]
+    
+    # Palabras que no deben ser parte del nombre
+    palabras_invalidas = [
+        'venta', 'renta', 'precio', 'cerca', 'junto', 'proximo', 'minutos',
+        'sobre', 'entre', 'casa', 'depto', 'departamento', 'terreno',
+        'infonavit', 'credito', 'banco', 'recurso', 'propio', 'acepto',
+        'aceptamos', 'contado', 'sala', 'comedor', 'cocina', 'recamara',
+        'recamaras', 'bano', 'banos', 'estacionamiento', 'garage',
+        'cuernavaca', 'morelos', 'exclusivo', 'privado', 'seguridad'
+    ]
+    
+    for patron in patrones:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            nombre = match.group(1).strip()
+            # Limpiar palabras comunes
+            palabras_a_eliminar = ['en', 'la', 'el', 'los', 'las', 'de', 'del', 'y', 'con']
+            for palabra in palabras_a_eliminar:
+                nombre = re.sub(r'\b' + palabra + r'\b', '', nombre, flags=re.IGNORECASE)
+            
+            # Eliminar palabras inválidas
+            for palabra in palabras_invalidas:
+                nombre = re.sub(r'\b' + palabra + r'\b', '', nombre, flags=re.IGNORECASE)
+            
+            nombre = ' '.join(nombre.split())  # Eliminar espacios múltiples
+            if len(nombre) > 3 and not any(palabra in nombre.lower() for palabra in palabras_invalidas):
+                return nombre.title()
+    
+    # Buscar nombres específicos de fraccionamientos conocidos
+    fraccionamientos_conocidos = [
+        'kloster sumiya', 'sumiya', 'tabachines', 'delicias',
+        'rancho cortes', 'vista hermosa', 'palmira', 'lomas de cocoyoc',
+        'burgos', 'paraiso country club', 'real de tetela'
+    ]
+    
+    for fracc in fraccionamientos_conocidos:
+        if fracc in texto.lower():
+            return fracc.title()
+    
+    return ""
+
+def procesar_numero_mexicano(numero):
+    """
+    Procesa un número en formato mexicano con manejo especial de separadores.
+    Retorna el valor numérico o None si no se puede procesar.
+    """
+    try:
+        # Limpiar el texto
+        numero = str(numero).replace(' ', '').replace('$', '').strip()
+        
+        # Si no hay números, retornar None
+        if not any(c.isdigit() for c in numero):
+            return None
+            
+        # Remover sufijos comunes
+        numero = numero.rstrip('.')  # Quitar punto final si existe
+        numero = numero.replace('.000', '').replace(',000', '')
+        
+        # Detectar si es un formato con millones
+        if 'millones' in numero.lower() or 'mdp' in numero.lower():
+            base = re.search(r'(\d+(?:[.,]\d+)?)', numero)
+            if base:
+                valor_base = base.group(1).replace(',', '.')
+                return float(valor_base) * 1_000_000
+        
+        # Detectar formato con punto como separador de miles (2.524.000)
+        if numero.count('.') > 1:
+            numero = numero.replace('.', '')
+        
+        # Detectar formato con coma como separador de miles (2,524,000)
+        if numero.count(',') > 1:
+            numero = numero.replace(',', '')
+        
+        # Si queda una coma, es decimal
+        if ',' in numero:
+            numero = numero.replace(',', '.')
+            
+        # Convertir a float y luego a int si es posible
+        valor = float(numero)
+        
+        # Validar rangos lógicos
+        if valor < 100:  # Probablemente es un error
+            return None
+            
+        if valor < 1000:  # Probablemente es en miles
+            valor *= 1000
+            
+        return int(valor) if valor.is_integer() else valor
+        
+    except Exception as e:
+        return None
+
+def validar_precio(valor, tipo_operacion=None):
+    """
+    Valida que el precio esté en un rango razonable según el tipo de operación.
+    Retorna (es_valido, confianza, mensaje_error).
+    """
+    if not valor or valor <= 0:
+        return False, 0.0, "Precio inválido o cero"
+    
+    if valor > 100_000_000:
+        return False, 0.0, "Precio excede el límite máximo de 100 millones"
+    
+    confianza = 0.8  # Confianza base
+    mensaje = None
+    
+    # Rangos por tipo de operación
+    rangos = {
+        "Venta": {
+            "min": 100_000,
+            "max": 50_000_000,
+            "optimo_min": 500_000,
+            "optimo_max": 20_000_000
+        },
+        "Renta": {
+            "min": 1_000,
+            "max": 100_000,
+            "optimo_min": 3_000,
+            "optimo_max": 50_000
+        }
+    }
+    
+    if tipo_operacion in rangos:
+        rango = rangos[tipo_operacion]
+        
+        # Verificar límites estrictos
+        if valor < rango["min"]:
+            return False, 0.0, f"Precio muy bajo para {tipo_operacion}"
+        if valor > rango["max"]:
+            return False, 0.0, f"Precio muy alto para {tipo_operacion}"
+        
+        # Ajustar confianza según el rango óptimo
+        if rango["optimo_min"] <= valor <= rango["optimo_max"]:
+            confianza = 0.9
+        else:
+            confianza = 0.7
+            mensaje = "Precio fuera del rango óptimo"
+    
+    # Ajustar confianza por números redondos
+    if valor % 1_000_000 == 0:
+        confianza *= 0.95  # Menos confianza en números muy redondos
+        if not mensaje:
+            mensaje = "Precio en millones exactos"
+    elif valor % 100_000 == 0:
+        confianza *= 0.98
+        if not mensaje:
+            mensaje = "Precio en cientos de miles exactos"
+    elif valor % 1_000 == 0:
+        confianza *= 0.99
+        if not mensaje:
+            mensaje = "Precio en miles exactos"
+    
+    # Ajustar confianza por magnitud del precio
+    if valor >= 10_000_000:
+        confianza *= 0.95  # Menor confianza en precios muy altos
+        if not mensaje:
+            mensaje = "Precio muy alto"
+    elif valor <= 200_000:
+        confianza *= 0.95  # Menor confianza en precios muy bajos
+        if not mensaje:
+            mensaje = "Precio muy bajo"
+    
+    return True, confianza, mensaje
+
+def extraer_ubicacion(texto):
+    """
+    Extrae información detallada de ubicación del texto.
+    """
+    ubicacion = {
+        "colonia": "",
+        "calle": "",
+        "estado": "Morelos",
+        "ciudad": "Cuernavaca",
+        "zona": "",
+        "referencias": []
+    }
+    
+    texto = texto.lower()
+    
+    # Lista de términos que NO deben ser considerados como nombres de colonia
+    terminos_invalidos = [
+        # Amenidades y características
+        'alberca', 'piscina', 'jardin', 'jardín', 'terraza', 'balcon', 'balcón',
+        'estacionamiento', 'garage', 'cochera', 'bodega', 'roof garden',
+        'gimnasio', 'gym', 'sala', 'comedor', 'cocina', 'recamara', 'recámara',
+        'baño', 'bano', 'servicio', 'cuarto', 'habitacion', 'habitación',
+        'condominio con', 'condominio de', 'departamento', 'casa', 'depto',
+        'todos los servicios', 'servicios incluidos', 'mantenimiento',
+        
+        # Términos de seguridad
+        'vigilancia', 'seguridad', 'acceso controlado', 'caseta', 'privada',
+        'estricta', 'control', 'camaras', 'cámaras',
+        
+        # Términos comerciales
+        'inversion', 'inversión', 'negocio', 'oportunidad', 'oferta', 'venta',
+        'renta', 'precio', 'credito', 'crédito', 'financiamiento',
+        
+        # Términos descriptivos
+        'ampliacion', 'ampliación', 'preparado', 'equipado', 'amueblado',
+        'nuevo', 'nueva', 'estrena', 'exclusivo', 'exclusiva', 'lujo',
+        'privilegiada', 'privilegiado'
+    ]
+    
+    # Lista ampliada de colonias conocidas y fraccionamientos de la zona
+    colonias_conocidas = [
+        # Cuernavaca
+        'ocotepec', 'ahuatepec', 'lomas de cortes', 'delicias', 'vista hermosa', 
+        'reforma', 'palmira', 'chapultepec', 'bellavista', 'tlaltenango',
+        'acapantzingo', 'san anton', 'san miguel acapantzingo', 'centro',
+        'la pradera', 'rancho cortes', 'poblado acapantzingo', 'las palmas',
+        'lomas de la selva', 'jardines de cuernavaca', 'la carolina',
+        'maravillas', 'tetela del monte', 'lomas de tetela', 'santa maria',
+        'buenavista', 'lomas de atzingo', 'tzompantle', 'provincias',
+        'lomas de cuernavaca', 'jardines de reforma', 'san jeronimo',
+        'la cañada', 'la herradura', 'los volcanes', 'las quintas',
+        'jardines de delicias', 'los limoneros', 'lomas de cortes',
+        'lomas de la selva', 'rancho tetela', 'santa fe', 'teopanzolco',
+        'vista hermosa', 'jardines de acapatzingo', 'lomas de ahuatlan',
+        'genova', 'residencial genova', 'lomas del mirador', 'amatitlan',
+        
+        # Emiliano Zapata
+        'tres de mayo', '3 de mayo', 'tezoyuca', 'los manantiales',
+        'campo verde', 'encinos', 'geovillas', 'burgos',
+        
+        # Jiutepec
+        'las fincas', 'tarianes', 'el pochotal', 'tejalpa',
+        'jardines de jiutepec', 'civac', 'la joya',
+        
+        # Temixco
+        'burgos bugambilias', 'campo verde', 'lomas de cuernavaca'
+    ]
+    
+    # Palabras que indican que es un nombre de colonia/fraccionamiento
+    indicadores_residencial = [
+        'residencial', 'fraccionamiento', 'fracc', 'unidad', 'colonia', 'col',
+        'condominio', 'privada', 'conjunto', 'cluster', 'coto', 'real',
+        'bosques de', 'jardines de', 'lomas de', 'villas de'
+    ]
+    
+    # Primero buscar en el título si hay un residencial/fraccionamiento
+    titulo_limpio = normalizar_texto(texto)
+    
+    # Buscar primero nombres específicos de residenciales/fraccionamientos
+    for colonia in colonias_conocidas:
+        if f" {colonia} " in f" {titulo_limpio} ":
+            ubicacion["colonia"] = colonia.title()
+            break
+    
+    # Si no se encontró, buscar por patrones con indicadores
+    if not ubicacion["colonia"]:
+        for indicador in indicadores_residencial:
+            patron = fr'{indicador}\s+([A-Za-zÁ-Úá-úñÑ\s]+?)(?=\s+(?:en|con|cerca|junto|sobre|por|entre|cuernavaca|morelos|venta|renta|\d|,|\.|$))'
+            if match := re.search(patron, titulo_limpio, re.IGNORECASE):
+                nombre = match.group(1).strip()
+                # Limpiar palabras comunes
+                nombre = re.sub(r'\b(en|la|el|los|las|de|del|y|con)\b', '', nombre, flags=re.IGNORECASE)
+                nombre = ' '.join(nombre.split())  # Eliminar espacios múltiples
+                
+                # Verificar que el nombre no contenga términos inválidos
+                if (len(nombre) > 2 and 
+                    not any(termino in nombre.lower() for termino in terminos_invalidos)):
+                    ubicacion["colonia"] = nombre.title()
+                    break
+    
+    # Si no se encontró en el título, buscar en el texto completo
+    if not ubicacion["colonia"]:
+        # Patrones mejorados para colonias
+        patrones_colonia = [
+            r'(?:col(?:onia)?|fracc(?:ionamiento)?|unidad\s+hab(?:itacional)?|barrio|zona|residencial)\s*[.:]\s*([A-Za-zÁ-Úá-úñÑ\s]+)',
+            r'en\s+(?:la\s+)?(?:colonia|fracc\.|unidad|barrio|residencial)\s+([A-Za-zÁ-Úá-úñÑ\s]+)',
+            r'ubicad[oa]\s+en\s+(?:la\s+)?(?:colonia|fracc\.|unidad|barrio|residencial)\s+([A-Za-zÁ-Úá-úñÑ\s]+)',
+            r'dentro\s+de\s+(?:la\s+)?(?:colonia|fracc\.|unidad|barrio|residencial)\s+([A-Za-zÁ-Úá-úñÑ\s]+)',
+            r'zona\s+(?:de\s+)?([A-Za-zÁ-Úá-úñÑ\s]+)'
+        ]
+        
+        for patron in patrones_colonia:
+            if match := re.search(patron, texto, re.IGNORECASE):
+                colonia = match.group(1).strip()
+                # Limpiar palabras comunes
+                colonia = re.sub(r'\b(en|la|el|los|las|de|del|y|con)\b', '', colonia, flags=re.IGNORECASE)
+                colonia = ' '.join(colonia.split())
+                
+                # Verificar que el nombre no contenga términos inválidos
+                if (len(colonia) > 2 and 
+                    not any(termino in colonia.lower() for termino in terminos_invalidos)):
+                    ubicacion["colonia"] = colonia.title()
+                    break
+    
+    # Si aún no se encontró, buscar en colonias conocidas
+    if not ubicacion["colonia"]:
+        for colonia in colonias_conocidas:
+            if colonia in texto:
+                ubicacion["colonia"] = colonia.title()
+                break
+    
+    # Patrones para calles
+    patrones_calle = [
+        r'(?:calle|av(?:enida)?|blvd?\.?|boulevard|privada|cerrada|andador)\s+([A-Za-zÁ-Úá-úñÑ\s\d]+?)(?=\s+(?:col|esquina|#|numero|núm|no\.)|\s*[,.]|$)',
+        r'ubicad[oa]\s+en\s+(?:calle|av\.?|blvd\.?)\s+([A-Za-zÁ-Úá-úñÑ\s\d]+?)(?=\s+(?:col|esquina|#|numero|núm|no\.)|\s*[,.]|$)',
+        r'sobre\s+(?:calle|av\.?|blvd\.?)\s+([A-Za-zÁ-Úá-úñÑ\s\d]+?)(?=\s+(?:col|esquina|#|numero|núm|no\.)|\s*[,.]|$)',
+        r'entre\s+(?:calle|av\.?)\s+([A-Za-zÁ-Úá-úñÑ\s\d]+?)\s+y\s+([A-Za-zÁ-Úá-úñÑ\s\d]+)'
+    ]
+    
+    # Buscar calle
+    for patron in patrones_calle:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            calle = match.group(1).strip()
+            # Limpiar palabras comunes
+            calle = re.sub(r'\b(en|la|el|los|las|de|del|y|con)\b', '', calle, flags=re.IGNORECASE)
+            calle = ' '.join(calle.split())
+            if len(calle) > 3:
+                ubicacion["calle"] = calle.title()
+                break
+    
+    # Patrones para referencias
+    patrones_referencias = [
+        r'cerca\s+(?:de|del|dela|a)\s+([^,.]+)',
+        r'junto\s+(?:a|al)\s+([^,.]+)',
+        r'a\s+(?:\d+\s+)?minutos?\s+(?:de|del)\s+([^,.]+)',
+        r'frente\s+(?:a|al)\s+([^,.]+)',
+        r'atrás\s+(?:de|del)\s+([^,.]+)',
+        r'a\s+(?:un\s+)?costado\s+(?:de|del)\s+([^,.]+)'
+    ]
+    
+    # Buscar referencias
+    referencias = []
+    for patron in patrones_referencias:
+        for match in re.finditer(patron, texto, re.IGNORECASE):
+            ref = match.group(1).strip()
+            if len(ref) > 3 and ref not in referencias:
+                referencias.append(ref)
+    
+    if referencias:
+        ubicacion["referencias"] = referencias
+    
+    # Detectar si está en Emiliano Zapata
+    if re.search(r'emiliano\s+zapata|e\.\s*zapata', texto, re.IGNORECASE):
+        ubicacion["ciudad"] = "Emiliano Zapata"
+    
+    return ubicacion
+
+def extraer_caracteristicas(texto):
+    """
+    Extrae características detalladas de la propiedad con patrones mejorados.
+    """
+    caracteristicas = {
+        "recamaras": None,
+        "banos": None,
+        "medio_bano": None,
+        "niveles": None,
+        "estacionamientos": None,
+        "superficie_m2": None,
+        "construccion_m2": None,
+        "edad": None,
+        "recamara_planta_baja": False,
+        "cisterna": False,
+        "capacidad_cisterna": None,
+        "amenidades": [],
+        "estado_conservacion": None,
+        "orientacion": None,
+        "seguridad": []
+    }
+    
+    texto = texto.lower()
+    
+    # Patrones mejorados para recámaras
+    patrones_recamaras = [
+        r'(\d+)\s*(?:rec(?:amaras?|ámaras?)?|hab(?:itaciones?)?|dormitorios?|cuartos?|alcobas?)',
+        r'(?:rec(?:amaras?|ámaras?)?|hab(?:itaciones?)?|dormitorios?)\s*(?::|con)?\s*(\d+)',
+        r'(?:casa|depto|departamento)\s+(?:de|con)\s+(\d+)\s*(?:rec|hab)',
+        r'(\d+)\s*(?:habitaciones?|cuartos?)\s+(?:para\s+)?dormir',
+        r'principal\s+y\s+(\d+)\s*(?:rec|hab)',
+        r'master\s+y\s+(\d+)\s*(?:rec|hab)'
+    ]
+    
+    # Patrones para baños
+    patrones_banos = [
+        r'(\d+(?:\.\d+)?)\s*(?:baños?|banos?|wc|sanitarios?)',
+        r'(?:baños?|banos?|wc|sanitarios?)\s*(?:completos?|principales?)?\s*(?::|con)?\s*(\d+(?:\.\d+)?)',
+        r'(\d+)\s*(?:baños?|banos?)\s+(?:completos?|principales?)',
+        r'medio\s+baño',
+        r'baño\s+completo',
+        r'(\d+)\s*(?:baños?)\s+y\s+medio'
+    ]
+    
+    # Patrones para superficie
+    patrones_superficie = [
+        r'(?:superficie|terreno|lote)\s*(?:de|:)?\s*(\d+(?:\.\d+)?)\s*(?:m²|m2|metros?|mt2|mts2)',
+        r'(\d+(?:\.\d+)?)\s*(?:m²|m2|metros?|mt2|mts2)\s*(?:de\s*terreno|superficie)',
+        r'(\d+)\s*x\s*(\d+)\s*(?:m²|m2|metros?)?',
+        r'(\d+)\s*por\s*(\d+)\s*(?:m²|m2|metros?)?',
+        r'terreno\s+de\s+(\d+(?:\.\d+)?)\s*(?:m²|m2|metros?)'
+    ]
+    
+    # Patrones para construcción
+    patrones_construccion = [
+        r'(?:construccion|construcción)\s*(?:de|:)?\s*(\d+(?:\.\d+)?)\s*(?:m²|m2|metros?|mt2|mts2)',
+        r'(\d+(?:\.\d+)?)\s*(?:m²|m2|metros?|mt2|mts2)\s*(?:de\s*construccion|de\s*construcción)',
+        r'area\s*construida\s*(?:de|:)?\s*(\d+(?:\.\d+)?)\s*(?:m²|m2|metros?)',
+        r'(\d+(?:\.\d+)?)\s*(?:m²|m2)\s*construidos'
+    ]
+    
+    # Patrones para estacionamientos
+    patrones_estacionamiento = [
+        r'(\d+)\s*(?:cajone?s?|lugares?|espacios?)\s*(?:de\s*)?(?:estacionamiento|auto|coche|carro)',
+        r'(?:estacionamiento|cochera|garage)\s*(?:para|con|de)\s*(\d+)\s*(?:auto|carro|coche)',
+        r'(\d+)\s*(?:autos?|carros?|coches?)\s*(?:en\s*)?(?:cochera|garage|estacionamiento)',
+        r'(?:con|incluye)\s*(\d+)\s*(?:lugares?|cajone?s?)\s*(?:de\s*)?estacionamiento'
+    ]
+    
+    # Patrones para niveles
+    patrones_niveles = [
+        r'(\d+)\s*(?:pisos?|nivele?s?|plantas?)',
+        r'(?:casa|propiedad)\s+(?:de|en)\s+(\d+)\s*(?:pisos?|nivele?s?)',
+        r'(\d+)\s*(?:pisos?|nivele?s?)\s+(?:de\s+)?(?:altura|construcción)'
+    ]
+    
+    # Patrones para edad
+    patrones_edad = [
+        r'(?:edad|antigüedad)\s*(?:de|:)?\s*(\d+)\s*(?:años?)',
+        r'(?:construi(?:da|do))\s*hace\s*(\d+)\s*años?',
+        r'(\d+)\s*años?\s*(?:de\s*)?(?:edad|antigüedad|construcción)'
+    ]
+    
+    # Lista de amenidades comunes
+    amenidades_buscar = [
+        'alberca', 'piscina', 'jardín', 'jardin', 'terraza', 'balcón', 'balcon',
+        'roof garden', 'gimnasio', 'gym', 'área de juegos', 'area de juegos',
+        'sala de cine', 'salón de fiestas', 'salon de fiestas', 'área verde',
+        'area verde', 'jacuzzi', 'sauna', 'bodega', 'cuarto de servicio',
+        'cuarto de lavado', 'vestidor', 'walk in closet', 'closet vestidor'
+    ]
+    
+    # Lista de elementos de seguridad
+    seguridad_buscar = [
+        'vigilancia', 'seguridad 24/7', 'cámaras', 'camaras', 'circuito cerrado',
+        'caseta', 'portón eléctrico', 'porton electrico', 'cerca electrificada',
+        'acceso controlado', 'interfón', 'interfon', 'guardia'
+    ]
+    
+    # Estados de conservación
+    estados_conservacion = {
+        'nuevo': ['nuevo', 'a estrenar', 'recién construido', 'recien construido'],
+        'excelente': ['excelente', 'impecable', 'remodelado', 'como nuevo'],
+        'bueno': ['buen estado', 'bien conservado', 'en buen estado'],
+        'regular': ['regular', 'necesita mantenimiento', 'para actualizar'],
+        'malo': ['mal estado', 'requiere renovación', 'para remodelar']
+    }
+    
+    # Orientaciones
+    orientaciones = ['norte', 'sur', 'este', 'oeste', 'oriente', 'poniente',
+                    'noreste', 'noroeste', 'sureste', 'suroeste']
+    
+    # Buscar recámaras
+    for patron in patrones_recamaras:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                caracteristicas["recamaras"] = int(match.group(1))
+                break
+            except:
+                continue
+    
+    # Buscar baños
+    total_banos = 0
+    medio_bano = False
+    
+    for patron in patrones_banos:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                if 'medio' in match.group(0):
+                    medio_bano = True
+                elif 'y medio' in match.group(0):
+                    num = int(match.group(1))
+                    total_banos = num
+                    medio_bano = True
+                else:
+                    num = float(match.group(1))
+                    if num.is_integer():
+                        total_banos = int(num)
+                    else:
+                        total_banos = int(num)
+                        medio_bano = True
+                break
+            except:
+                continue
+    
+    if total_banos > 0:
+        caracteristicas["banos"] = total_banos
+    if medio_bano:
+        caracteristicas["medio_bano"] = 1
+    
+    # Buscar superficie
+    for patron in patrones_superficie:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                if 'x' in patron or 'por' in patron:
+                    largo = float(match.group(1))
+                    ancho = float(match.group(2))
+                    caracteristicas["superficie_m2"] = int(largo * ancho)
+                else:
+                    caracteristicas["superficie_m2"] = int(float(match.group(1)))
+                break
+            except:
+                continue
+    
+    # Buscar construcción
+    for patron in patrones_construccion:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                caracteristicas["construccion_m2"] = int(float(match.group(1)))
+                break
+            except:
+                continue
+    
+    # Buscar estacionamientos
+    for patron in patrones_estacionamiento:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                caracteristicas["estacionamientos"] = int(match.group(1))
+                break
+            except:
+                continue
+    
+    # Buscar niveles
+    for patron in patrones_niveles:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                caracteristicas["niveles"] = int(match.group(1))
+                break
+            except:
+                continue
+    
+    # Buscar edad
+    for patron in patrones_edad:
+        if match := re.search(patron, texto, re.IGNORECASE):
+            try:
+                caracteristicas["edad"] = int(match.group(1))
+                break
+            except:
+                continue
+    
+    # Detectar recámara en planta baja
+    if re.search(r'rec[aá]mara\s+(?:en\s+)?(?:planta\s+)?baja|rec[aá]mara\s+principal\s+abajo', texto):
+        caracteristicas["recamara_planta_baja"] = True
+    
+    # Detectar cisterna y su capacidad
+    if 'cisterna' in texto:
+        caracteristicas["cisterna"] = True
+        if match := re.search(r'cisterna\s*(?:de|con)?\s*(\d+)\s*(?:m3|litros?|metros?3?)', texto):
+            try:
+                caracteristicas["capacidad_cisterna"] = int(match.group(1))
+            except:
+                pass
+    
+    # Buscar amenidades
+    for amenidad in amenidades_buscar:
+        if amenidad in texto:
+            caracteristicas["amenidades"].append(amenidad)
+    
+    # Buscar elementos de seguridad
+    for elemento in seguridad_buscar:
+        if elemento in texto:
+            caracteristicas["seguridad"].append(elemento)
+    
+    # Determinar estado de conservación
+    for estado, palabras in estados_conservacion.items():
+        if any(palabra in texto for palabra in palabras):
+            caracteristicas["estado_conservacion"] = estado
+            break
+    
+    # Determinar orientación
+    for orientacion in orientaciones:
+        if f"orientación {orientacion}" in texto or f"orientacion {orientacion}" in texto:
+            caracteristicas["orientacion"] = orientacion
+            break
+    
+    return caracteristicas
+
+def normalizar_amenidad(amenidad):
+    """
+    Normaliza una amenidad específica aplicando reglas de unificación.
+    """
+    # Normalizar a minúsculas y quitar espacios extras
+    amenidad = amenidad.lower().strip()
+    
+    # Normalizar acentos
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ü': 'u', 'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i',
+        'ò': 'o', 'ù': 'u', 'ä': 'a', 'ë': 'e', 'ï': 'i',
+        'ö': 'o', 'ü': 'u'
+    }
+    
+    for old, new in replacements.items():
+        amenidad = amenidad.replace(old, new)
+    
+    return amenidad
+
+def validar_y_normalizar_datos(datos):
+    """
+    Valida y normaliza los datos extraídos para asegurar consistencia.
+    """
+    # Validar y normalizar precio
+    if datos.get("precio_str"):
+        precio_num = procesar_numero_mexicano(datos["precio_str"])
+        if precio_num:
+            datos["precio_num"] = precio_num
+            
+            # Validar coherencia del precio según tipo de operación
+            if datos.get("tipo_operacion") == "Renta" and precio_num > 100_000:
+                datos["tipo_operacion"] = "Venta"
+            elif datos.get("tipo_operacion") == "Venta" and precio_num < 10_000:
+                datos["tipo_operacion"] = "Renta"
+                
+            # Si el tipo de operación es desconocido, intentar inferirlo por el precio
+            if datos.get("tipo_operacion") == "Desconocido":
+                if precio_num > 500_000:
+                    datos["tipo_operacion"] = "Venta"
+                elif precio_num < 100_000:
+                    datos["tipo_operacion"] = "Renta"
+    
+    # Validar y normalizar ubicación
+    if "ubicacion" in datos:
+        ubicacion = datos["ubicacion"]
+        
+        # Normalizar nombres de colonias
+        if ubicacion.get("colonia"):
+            colonia = ubicacion["colonia"].title()
+            # Corregir casos especiales
+            colonia = colonia.replace(" De ", " de ").replace(" Del ", " del ")
+            ubicacion["colonia"] = colonia
+        
+        # Si no hay colonia pero hay zona, usar zona como colonia
+        if not ubicacion.get("colonia") and ubicacion.get("zona"):
+            ubicacion["colonia"] = ubicacion["zona"]
+            ubicacion["zona"] = ""
+            
+        # Si hay referencias pero no hay colonia ni zona, usar la primera referencia como zona
+        if not ubicacion.get("colonia") and not ubicacion.get("zona") and ubicacion.get("referencias"):
+            ubicacion["zona"] = ubicacion["referencias"][0].title()
+    
+    # Validar y normalizar características
+    if "caracteristicas" in datos:
+        caract = datos["caracteristicas"]
+        
+        # Validar rangos lógicos
+        if caract.get("recamaras"):
+            if not isinstance(caract["recamaras"], (int, float)) or caract["recamaras"] > 10:
+                caract["recamaras"] = None
+                
+        if caract.get("banos"):
+            if not isinstance(caract["banos"], (int, float)) or caract["banos"] > 8:
+                caract["banos"] = None
+                
+        if caract.get("superficie_m2"):
+            try:
+                # Convertir a entero si es float
+                caract["superficie_m2"] = int(float(caract["superficie_m2"]))
+                if caract["superficie_m2"] > 10000:  # Más de 1 hectárea
+                    caract["superficie_m2"] = None
+            except:
+                caract["superficie_m2"] = None
+                
+        if caract.get("construccion_m2"):
+            try:
+                # Convertir a entero si es float
+                caract["construccion_m2"] = int(float(caract["construccion_m2"]))
+                if caract["construccion_m2"] > 5000:  # Muy grande
+                    caract["construccion_m2"] = None
+            except:
+                caract["construccion_m2"] = None
+            
+        # Validar que construcción no sea mayor que superficie
+        if caract.get("superficie_m2") and caract.get("construccion_m2"):
+            if caract["construccion_m2"] > caract["superficie_m2"]:
+                # En este caso, probablemente superficie es construcción
+                caract["construccion_m2"] = caract["superficie_m2"]
+                caract["superficie_m2"] = None
+        
+        # Normalizar amenidades
+        if caract.get("amenidades"):
+            # Mapeo de términos similares a un término canónico
+            mappings = {
+                'alberca': ['piscina', 'pool', 'chapoteadero', 'area de nado', 'alberca', 'albercas', 'area de natacion', 'área de natación'],
+                'jardin': ['jardin', 'jardín', 'jardines', 'area verde', 'area ajardinada', 'areas verdes', 'zona verde', 'área verde', 'áreas verdes', 'jardines', 'áreas ajardinadas', 'zona ajardinada', 'espacio verde'],
+                'terraza': ['terraza', 'balcon', 'balcón', 'balcones', 'deck', 'terraza exterior', 'terrazas', 'terraza descubierta', 'patio', 'patio trasero', 'patio delantero'],
+                'roof garden': ['roof garden', 'rooftop', 'sky garden', 'terraza en azotea', 'azotea verde', 'roof_garden', 'roofgarden', 'terraza superior', 'azotea con jardin'],
+                'gimnasio': ['gimnasio', 'gym', 'area de ejercicio', 'sala de ejercicio', 'gimnasios', 'área de ejercicio', 'centro de ejercicio', 'sala de fitness'],
+                'areas comunes': ['area comun', 'areas comunes', 'espacios comunes', 'amenidades comunes', 'area común', 'áreas comunes', 'zona común', 'zonas comunes', 'espacios compartidos'],
+                'area de juegos': ['juegos infantiles', 'area infantil', 'playground', 'parque infantil', 'área de juegos', 'área infantil', 'zona de juegos', 'parque de juegos', 'juegos para niños'],
+                'salon de eventos': ['salon', 'salon de fiestas', 'salón', 'salón de fiestas', 'salon de usos multiples', 'area de eventos', 'salón de eventos', 'área de eventos', 'salon social', 'salón social'],
+                'bodega': ['bodega', 'storage', 'cuarto de guardado', 'almacen', 'almacén', 'bodegas', 'área de guardado', 'cuarto de almacenaje', 'espacio de almacenamiento'],
+                'estudio': ['estudio', 'oficina', 'biblioteca', 'home office', 'despacho', 'estudios', 'área de trabajo', 'espacio de trabajo', 'oficina en casa'],
+                'cocina integral': ['cocina integral', 'cocina equipada', 'cocina completa', 'cocina integral equipada', 'cocina full', 'cocina moderna', 'cocina amueblada'],
+                'vestidor': ['vestidor', 'walk in closet', 'closet vestidor', 'walking closet', 'vestidores', 'closet vestidor', 'vestidor amplio', 'closet amplio'],
+                'cuarto de servicio': ['cuarto de servicio', 'habitacion de servicio', 'cuarto servicio', 'habitación de servicio', 'área de servicio', 'cuarto para servicio', 'habitación para servicio'],
+                'cuarto de lavado': ['cuarto de lavado', 'area de lavado', 'área de lavado', 'lavanderia', 'lavandería', 'zona de lavado', 'cuarto de lavanderia', 'área de lavandería'],
+                'jacuzzi': ['jacuzzi', 'jacuzzy', 'hidromasaje', 'tina de hidromasaje', 'jacuzzis', 'spa', 'tina de spa'],
+                'seguridad': ['vigilancia', 'seguridad', 'caseta', 'privada', 'vigilante', 'seguridad 24/7', 'control de acceso', 'camaras', 'cámaras', 'circuito cerrado', 'seguridad privada'],
+                'elevador': ['elevador', 'ascensor', 'lift', 'elevadores', 'ascensores'],
+                'aire acondicionado': ['aire acondicionado', 'a/c', 'clima', 'minisplit', 'climatizacion', 'aire', 'clima artificial', 'sistema de aire'],
+                'amueblado': ['amueblado', 'equipado', 'línea blanca', 'linea blanca', 'cocina equipada', 'totalmente amueblado', 'semi amueblado'],
+                'calentador solar': ['calentador solar', 'paneles solares', 'energia solar', 'calentamiento solar', 'sistema solar'],
+                'cisterna': ['cisterna', 'aljibe', 'almacenamiento de agua', 'tanque de agua', 'deposito de agua'],
+                'internet': ['internet', 'wifi', 'conexion a internet', 'internet de alta velocidad', 'red wifi'],
+                'gas natural': ['gas natural', 'gas estacionario', 'instalacion de gas', 'gas lp', 'gas ciudad'],
+                'hidroneumatico': ['hidroneumatico', 'hidro', 'bomba de agua', 'presurizador', 'sistema hidroneumatico', 'bomba presurizada'],
+                'bar': ['bar', 'cantina', 'cava', 'area de bar', 'barra', 'bar equipado']
+            }
+            
+            # Normalizar los términos canónicos y sus variantes
+            mappings_normalized = {}
+            for canonical, variants in mappings.items():
+                canonical_norm = normalizar_texto(canonical)
+                variants_norm = set()
+                for variant in variants:
+                    variants_norm.add(normalizar_texto(variant))
+                mappings_normalized[canonical_norm] = list(variants_norm)
+            
+            # Crear un mapeo inverso para búsqueda rápida
+            variant_to_canonical = {}
+            for canonical, variants in mappings_normalized.items():
+                for variant in variants:
+                    variant_to_canonical[variant] = canonical
+                variant_to_canonical[canonical] = canonical
+            
+            amenidades_norm = set()
+            for amenidad in caract["amenidades"]:
+                amenidad_norm = normalizar_texto(amenidad)
+                
+                # Primero intentar coincidencia exacta
+                if amenidad_norm in variant_to_canonical:
+                    amenidades_norm.add(variant_to_canonical[amenidad_norm])
+                    continue
+                
+                # Si no hay coincidencia exacta, buscar coincidencias parciales
+                found = False
+                for canonical, variants in mappings_normalized.items():
+                    # Buscar si alguna variante está contenida en la amenidad o viceversa
+                    if any(variant in amenidad_norm or amenidad_norm in variant for variant in variants):
+                        amenidades_norm.add(canonical)
+                        found = True
+                        break
+                
+                # Si no se encuentra en el mapeo, usar la amenidad normalizada
+                if not found:
+                    amenidades_norm.add(amenidad_norm)
+            
+            caract["amenidades"] = sorted(list(amenidades_norm))
+        
+        # Normalizar elementos de seguridad
+        if caract.get("seguridad"):
+            seguridad_norm = []
+            for elemento in caract["seguridad"]:
+                elemento = elemento.lower().strip()
+                elemento = elemento.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
+                if elemento not in seguridad_norm:
+                    seguridad_norm.append(elemento)
+            caract["seguridad"] = sorted(seguridad_norm)
+            
+        # Validar estado de conservación
+        if caract.get("estado_conservacion"):
+            estado = caract["estado_conservacion"].lower()
+            estados_validos = ["nuevo", "excelente", "bueno", "regular", "malo"]
+            if estado not in estados_validos:
+                caract["estado_conservacion"] = None
+                
+        # Validar orientación
+        if caract.get("orientacion"):
+            orientacion = caract["orientacion"].lower()
+            orientaciones_validas = ["norte", "sur", "este", "oeste", "noreste", "noroeste", "sureste", "suroeste"]
+            if orientacion not in orientaciones_validas:
+                caract["orientacion"] = None
+    
+    # Extraer características y ubicación de la descripción si no se encontraron
+    if datos.get("descripcion"):
+        # Si no hay características o están incompletas, intentar extraerlas
+        if not datos.get("caracteristicas") or not any([
+            datos["caracteristicas"].get("recamaras"),
+            datos["caracteristicas"].get("banos"),
+            datos["caracteristicas"].get("superficie_m2")
+        ]):
+            datos["caracteristicas"] = extraer_caracteristicas(datos["descripcion"])
+        
+        # Si no hay ubicación o está incompleta, intentar extraerla
+        if not datos.get("ubicacion") or not datos["ubicacion"].get("colonia"):
+            datos["ubicacion"] = extraer_ubicacion(datos["descripcion"])
+    
+    return datos
+
+if __name__ == '__main__':
+    procesar_datos_crudos() 

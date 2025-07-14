@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+MÓDULO DE PROCESAMIENTO DE PRECIOS
+---------------------------------
+
+Este módulo es la ÚNICA fuente autorizada para procesar y validar precios.
+Cualquier otro módulo que necesite trabajar con precios DEBE usar las funciones
+de este módulo.
+
+RESPONSABILIDADES:
+1. Extraer precios de texto
+2. Normalizar precios a un formato estándar
+3. Validar precios
+4. Convertir entre monedas
+5. Formatear precios para mostrar
+
+REGLAS:
+1. Toda operación con precios DEBE pasar por este módulo
+2. NO hacer suposiciones sobre el tipo de operación
+3. Mantener registro de todas las transformaciones
+4. En caso de duda, marcar como no válido
+"""
+
+import re
+import logging
+from typing import Dict, Optional, Union, List, Tuple
+from decimal import Decimal, ROUND_HALF_UP
+import shutil
+
+# Configuración de logging
+logger = logging.getLogger('precio')
+logger.setLevel(logging.DEBUG)
+
+# Constantes
+TIPO_CAMBIO_USD = 17.50  # Actualizar según necesidad
+MIN_PRECIO_VALIDO = 1000  # Precio mínimo considerado válido
+MAX_PRECIO_VALIDO = 100_000_000  # Precio máximo considerado válido
+
+class PrecioInvalido(Exception):
+    """Excepción para precios inválidos"""
+    pass
+
+def _normalizar_texto(texto: str) -> str:
+    """
+    Normaliza texto para procesamiento.
+    USO INTERNO ÚNICAMENTE.
+    """
+    if not texto:
+        return ""
+    return re.sub(r'\s+', ' ', texto.lower().strip())
+
+def _convertir_a_decimal(valor: Union[str, float, int]) -> Optional[Decimal]:
+    """
+    Convierte un valor a Decimal de manera segura.
+    USO INTERNO ÚNICAMENTE.
+    """
+    try:
+        if isinstance(valor, str):
+            # Limpiar el string
+            valor = re.sub(r'[^\d.,]', '', valor)
+            # Manejar diferentes formatos de número
+            if ',' in valor and '.' in valor:
+                if valor.find(',') < valor.find('.'):
+                    valor = valor.replace(',', '')
+                else:
+                    valor = valor.replace('.', '').replace(',', '.')
+            elif ',' in valor:
+                valor = valor.replace(',', '.')
+        return Decimal(str(valor))
+    except (ValueError, TypeError, decimal.InvalidOperation):
+        return None
+
+def extraer_precio(texto: str) -> Dict:
+    """
+    Extrae información de precio de un texto.
+    
+    Args:
+        texto: Texto que contiene información de precio
+        
+    Returns:
+        Dict con:
+        - valor: float o None
+        - moneda: str ('MXN', 'USD', etc.)
+        - texto_original: str
+        - es_valido: bool
+        - confianza: float (0-1)
+        - mensaje: str
+    """
+    resultado = {
+        "valor": None,
+        "moneda": None,
+        "texto_original": texto,
+        "es_valido": False,
+        "confianza": 0.0,
+        "mensaje": "No se pudo procesar el precio"
+    }
+    
+    if not texto:
+        resultado["mensaje"] = "Texto vacío"
+        return resultado
+        
+    texto_norm = _normalizar_texto(texto)
+    
+    # Detectar moneda
+    if re.search(r'(?:us[\$]|usd|dls|dolares|dólares)', texto_norm):
+        moneda = "USD"
+        multiplicador = TIPO_CAMBIO_USD
+    else:
+        moneda = "MXN"
+        multiplicador = 1
+    
+    # Extraer valor numérico
+    patrones = [
+        # Millones
+        (r'(\d+(?:[.,]\d+)?)\s*(?:millones|mdp|m)', 1_000_000),
+        # Miles
+        (r'(\d+(?:[.,]\d+)?)\s*(?:mil|k)', 1_000),
+        # Número normal
+        (r'(\d+(?:[.,]\d+)?)', 1)
+    ]
+    
+    for patron, mult in patrones:
+        match = re.search(patron, texto_norm)
+        if match:
+            valor_str = match.group(1)
+            valor_decimal = _convertir_a_decimal(valor_str)
+            
+            if valor_decimal is not None:
+                valor = float(valor_decimal * Decimal(str(mult)) * Decimal(str(multiplicador)))
+                
+                # Validar rango
+                if MIN_PRECIO_VALIDO <= valor <= MAX_PRECIO_VALIDO:
+                    resultado.update({
+                        "valor": valor,
+                        "moneda": moneda,
+                        "es_valido": True,
+                        "confianza": 0.9,
+                        "mensaje": "Precio extraído correctamente"
+                    })
+                    return resultado
+                else:
+                    resultado.update({
+                        "valor": valor,
+                        "moneda": moneda,
+                        "es_valido": False,
+                        "confianza": 0.3,
+                        "mensaje": f"Precio fuera de rango válido ({MIN_PRECIO_VALIDO:,} - {MAX_PRECIO_VALIDO:,})"
+                    })
+                    return resultado
+    
+    return resultado
+
+def validar_precio(precio: Union[Dict, float, int, str]) -> Dict:
+    """
+    Valida un precio y lo normaliza al formato estándar.
+    SIEMPRE devuelve un dict con estructura consistente.
+    
+    Args:
+        precio: Precio en cualquier formato soportado
+        
+    Returns:
+        Dict con estructura:
+        {
+            "valor": float o None,
+            "moneda": str o None,
+            "texto_original": str,
+            "es_valido": bool,
+            "confianza": float,
+            "mensaje": str
+        }
+    """
+    # Estructura base que SIEMPRE se devuelve
+    resultado = {
+        "valor": None,
+        "moneda": None,
+        "texto_original": str(precio) if precio is not None else "",
+        "es_valido": False,
+        "confianza": 0.0,
+        "mensaje": "Precio no disponible"
+    }
+    
+    # Si ya es un dict con la estructura correcta, devolverlo tal cual
+    if isinstance(precio, dict):
+        return precio
+    
+    # Si es un número, convertirlo a dict manteniendo el valor original
+    if isinstance(precio, (int, float)):
+        resultado.update({
+            "valor": float(precio),
+            "moneda": "MXN",
+            "texto_original": str(precio),
+            "es_valido": True,
+            "confianza": 1.0,
+            "mensaje": "Precio numérico directo"
+        })
+        return resultado
+    
+    # Si es string, mantenerlo como texto
+    if isinstance(precio, str):
+        resultado.update({
+            "texto_original": precio,
+            "es_valido": True,
+            "confianza": 1.0,
+            "mensaje": "Precio en texto"
+        })
+        return resultado
+    
+    return resultado
+
+def formatear_precio(precio: Union[Dict, float, int, str], formato: str = "completo") -> str:
+    """
+    Formatea un precio para mostrar.
+    
+    Args:
+        precio: Precio en cualquier formato soportado
+        formato: Tipo de formato ("completo", "corto", "simple")
+        
+    Returns:
+        str: Precio formateado
+    """
+    # Primero normalizar
+    precio_dict = validar_precio(precio)
+    
+    if not precio_dict["es_valido"] or precio_dict["valor"] is None:
+        return "Precio no disponible"
+    
+    valor = precio_dict["valor"]
+    moneda = precio_dict["moneda"]
+    
+    # Formatear según el tipo
+    if formato == "completo":
+        return f"{valor:,.2f} {moneda}"
+    elif formato == "corto":
+        if valor >= 1_000_000:
+            return f"{valor/1_000_000:.1f}M {moneda}"
+        elif valor >= 1_000:
+            return f"{valor/1_000:.1f}K {moneda}"
+        else:
+            return f"{valor:,.0f} {moneda}"
+    else:  # simple
+        return f"{valor:,.0f}"
+
+def extraer_precio_de_propiedad(propiedad: dict) -> float:
+    """
+    Extrae y normaliza el precio SOLO del campo 'precio' o 'valor'.
+    Soporta formatos como: '$2,500,500.50', '2.500.500,50', '1000000', etc.
+    Devuelve el número como float, o None si no se puede convertir.
+    """
+    valor = None
+    if 'precio' in propiedad:
+        valor = propiedad['precio']
+    elif 'valor' in propiedad:
+        valor = propiedad['valor']
+    else:
+        return None
+    if isinstance(valor, (int, float)):
+        return float(valor)
+    if isinstance(valor, str):
+        # Limpiar símbolos
+        valor_limpio = valor.replace('$','').replace(' ','').replace('MXN','').replace('USD','')
+        # Detectar formato con punto decimal
+        if valor_limpio.count('.') == 1 and valor_limpio.count(',') > 0:
+            valor_limpio = valor_limpio.replace(',','')
+        elif valor_limpio.count(',') == 1 and valor_limpio.count('.') > 0:
+            valor_limpio = valor_limpio.replace('.','').replace(',','.')
+        else:
+            valor_limpio = valor_limpio.replace(',','')
+        try:
+            return float(valor_limpio)
+        except Exception:
+            return None
+    return None
+
+def actualizar_precio_propiedad(propiedad: Dict) -> Dict:
+    """
+    Actualiza el precio en una propiedad.
+    Esta es la función principal que otros módulos deben usar.
+    SIEMPRE mantiene el texto original del precio.
+    
+    Args:
+        propiedad: Diccionario con los datos de la propiedad
+        
+    Returns:
+        Dict: Propiedad con precio actualizado
+    """
+    try:
+        # Si ya tiene precio, mantenerlo tal cual
+        if "precio" in propiedad:
+            return propiedad
+            
+        # Si no tiene precio, intentar extraerlo de la descripción
+        if "descripcion" in propiedad:
+            precio = extraer_precio(propiedad["descripcion"])
+            propiedad["precio"] = precio
+            
+        return propiedad
+        
+    except Exception as e:
+        logger.error(f"Error procesando precio: {str(e)}")
+        return propiedad 

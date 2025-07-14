@@ -1,0 +1,498 @@
+// Node.js + Express para servir archivos estáticos
+const express = require("express");
+const path = require("path");
+const compression = require('compression');
+const fs = require('fs').promises;
+const fsSync = require('fs');
+const JSONStream = require('jsonstream-next');
+
+const app = express();
+const port = 8080;
+
+// Habilitar compresión gzip
+app.use(compression());
+
+// Cache en memoria para índices y datos frecuentes
+const cache = {
+    indices: null,
+    propiedadesPorCiudad: new Map(),
+    ultimaActualizacion: null
+};
+
+// Configuración de caché
+const CACHE_DURATION = 3600000; // 1 hora
+const MAX_CACHE_ITEMS = 100;
+
+// Middleware para logging
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
+// Middleware para manejar errores
+app.use((err, req, res, next) => {
+    console.error('Error en la aplicación:', err.stack);
+    res.status(500).send('¡Algo salió mal!');
+});
+
+// Configuración de archivos estáticos con manejo de errores
+app.use(express.static(__dirname, {
+    maxAge: '1h',
+    etag: true,
+    lastModified: true
+}));
+
+// Función para cargar índices
+async function cargarIndices() {
+    try {
+        // Cargar el archivo principal de propiedades
+        const propiedadesPath = path.join(__dirname, 'resultados', 'propiedades_estructuradas.json');
+        const data = await fs.readFile(propiedadesPath, 'utf8');
+        const propiedades = JSON.parse(data);
+        
+        // Generar índices
+        const ciudades = new Map();
+        const tiposPropiedad = new Map();
+        const tiposOperacion = new Map();
+        
+        propiedades.forEach(p => {
+            // Índice de ciudades
+            if (p.ubicacion?.ciudad) {
+                const ciudad = p.ubicacion.ciudad;
+                if (!ciudades.has(ciudad)) {
+                    ciudades.set(ciudad, {
+                        nombre: ciudad,
+                        total: 1,
+                        rangos_precio: {
+                            min: extraerValorPrecio(p.propiedad?.precio),
+                            max: extraerValorPrecio(p.propiedad?.precio)
+                        }
+                    });
+                } else {
+                    const datos = ciudades.get(ciudad);
+                    datos.total++;
+                    const precio = extraerValorPrecio(p.propiedad?.precio);
+                    if (precio > 0) {
+                        datos.rangos_precio.min = Math.min(datos.rangos_precio.min, precio);
+                        datos.rangos_precio.max = Math.max(datos.rangos_precio.max, precio);
+                    }
+                }
+            }
+            
+            // Índice de tipos de propiedad
+            if (p.propiedad?.tipo_propiedad) {
+                const tipo = p.propiedad.tipo_propiedad;
+                tiposPropiedad.set(tipo, (tiposPropiedad.get(tipo) || 0) + 1);
+            }
+            
+            // Índice de tipos de operación
+            if (p.propiedad?.tipo_operacion) {
+                const operacion = p.propiedad.tipo_operacion;
+                tiposOperacion.set(operacion, (tiposOperacion.get(operacion) || 0) + 1);
+            }
+        });
+        
+        return {
+            ciudades: Array.from(ciudades.values()),
+            tiposPropiedad: Array.from(tiposPropiedad.entries()).map(([tipo, total]) => ({
+                nombre: tipo,
+                total
+            })),
+            tiposOperacion: Array.from(tiposOperacion.entries()).map(([tipo, total]) => ({
+                nombre: tipo,
+                total
+            }))
+        };
+    } catch (error) {
+        console.error('Error al generar índices:', error);
+        throw error;
+    }
+}
+
+// API para obtener índices
+app.get('/api/indices', async (req, res) => {
+    try {
+        // Usar caché si está disponible y válido
+        if (cache.indices && Date.now() - cache.ultimaActualizacion < CACHE_DURATION) {
+            return res.json(cache.indices);
+        }
+
+        // Cargar índices desde archivos
+        const indices = await cargarIndices();
+        cache.indices = indices;
+        cache.ultimaActualizacion = Date.now();
+        
+        res.json(indices);
+    } catch (error) {
+        console.error('Error al cargar índices:', error);
+        res.status(500).json({ error: 'Error al cargar índices' });
+    }
+});
+
+// Función para generar clave de caché
+function generarClaveFiltro(filtros) {
+    return JSON.stringify(Object.entries(filtros).sort());
+}
+
+// Función para limpiar caché antiguo
+function limpiarCache() {
+    if (cache.propiedadesPorCiudad.size > MAX_CACHE_ITEMS) {
+        const entradas = Array.from(cache.propiedadesPorCiudad.entries());
+        entradas.sort((a, b) => a[1].timestamp - b[1].timestamp);
+        const aEliminar = entradas.slice(0, entradas.length - MAX_CACHE_ITEMS);
+        aEliminar.forEach(([key]) => cache.propiedadesPorCiudad.delete(key));
+    }
+}
+
+// API para obtener propiedades filtradas y paginadas
+app.get('/api/propiedades', async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const ciudad = req.query.ciudad;
+        const busqueda = req.query.busqueda;
+        const precioMin = req.query.precioMin ? parseFloat(req.query.precioMin) : null;
+        const precioMax = req.query.precioMax ? parseFloat(req.query.precioMax) : null;
+        const tipoOperacion = req.query.tipoOperacion;
+
+        // Cargar propiedades
+        let propiedades = await cargarPropiedades(ciudad);
+
+        // Aplicar filtros
+        if (busqueda) {
+            const busquedaLower = busqueda.toLowerCase();
+            propiedades = propiedades.filter(p => 
+                (p.titulo?.toLowerCase().includes(busquedaLower) ||
+                 p.descripcion_original?.toLowerCase().includes(busquedaLower) ||
+                 p.ubicacion?.direccion_completa?.toLowerCase().includes(busquedaLower))
+            );
+        }
+
+        if (precioMin !== null) {
+            propiedades = propiedades.filter(p => {
+                const precio = extraerValorPrecio(p.propiedad?.precio);
+                return precio >= precioMin;
+            });
+        }
+
+        if (precioMax !== null) {
+            propiedades = propiedades.filter(p => {
+                const precio = extraerValorPrecio(p.propiedad?.precio);
+                return precio <= precioMax;
+            });
+        }
+
+        if (tipoOperacion) {
+            const operaciones = tipoOperacion.split(',');
+            propiedades = propiedades.filter(p => 
+                operaciones.includes(p.propiedad?.tipo_operacion)
+            );
+        }
+
+        // Calcular paginación
+        const startIndex = (page - 1) * limit;
+        const endIndex = page * limit;
+        const total = propiedades.length;
+
+        // Devolver solo las propiedades de la página actual
+        const propiedadesPaginadas = propiedades.slice(startIndex, endIndex);
+
+        res.json({
+            propiedades: propiedadesPaginadas,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
+    } catch (error) {
+        console.error('Error al cargar propiedades:', error);
+        res.status(500).json({ error: 'Error al cargar propiedades' });
+    }
+});
+
+// Función para cargar y filtrar propiedades
+async function cargarYFiltrarPropiedades(filtros) {
+    const ciudad = filtros.ciudad;
+    if (!ciudad) {
+        throw new Error('Se requiere especificar una ciudad');
+    }
+
+    const ciudadPath = path.join(__dirname, 'resultados', 'propiedades', ciudad);
+    const archivos = await fs.readdir(ciudadPath);
+    
+    let propiedades = [];
+    for (const archivo of archivos) {
+        if (archivo.endsWith('.json')) {
+            const contenido = await fs.readFile(path.join(ciudadPath, archivo), 'utf8');
+            const datos = JSON.parse(contenido);
+            propiedades = propiedades.concat(filtrarPropiedades(datos, filtros));
+        }
+    }
+    
+    return propiedades;
+}
+
+// Función para filtrar propiedades según criterios
+function filtrarPropiedades(propiedades, filtros) {
+    return propiedades.filter(prop => {
+        if (filtros.tipoPropiedad && prop.propiedad?.tipo_propiedad !== filtros.tipoPropiedad) {
+            return false;
+        }
+        
+        if (filtros.precioMin || filtros.precioMax) {
+            const precio = extraerPrecio(prop.propiedad?.precio);
+            if (filtros.precioMin && precio < filtros.precioMin) return false;
+            if (filtros.precioMax && precio > filtros.precioMax) return false;
+        }
+        
+        return true;
+    });
+}
+
+// Función auxiliar para extraer precio numérico
+function extraerPrecio(precio) {
+    if (!precio) return 0;
+    if (typeof precio === 'number') return precio;
+    if (typeof precio === 'object' && precio.valor) return parseFloat(precio.valor);
+    return 0;
+}
+
+// Ruta para el index.html con manejo de errores
+app.get('/', (req, res, next) => {
+    try {
+        res.sendFile(path.join(__dirname, 'index.html'), (err) => {
+            if (err) {
+                console.error('Error enviando index.html:', err);
+                next(err);
+            }
+        });
+    } catch (err) {
+        console.error('Error en ruta raíz:', err);
+        next(err);
+    }
+});
+
+// Manejo de 404 con manejo de errores
+app.use((req, res, next) => {
+    try {
+        res.status(404).sendFile(path.join(__dirname, 'index.html'), (err) => {
+            if (err) {
+                console.error('Error enviando 404:', err);
+                next(err);
+            }
+        });
+    } catch (err) {
+        console.error('Error en 404:', err);
+        next(err);
+    }
+});
+
+// Manejo de errores global
+app.use((err, req, res, next) => {
+    console.error('Error no manejado:', err);
+    res.status(500).send('Error interno del servidor');
+});
+
+// Script para dividir el archivo grande en archivos más pequeños
+async function dividirArchivoPropiedades() {
+    const PROPIEDADES_POR_ARCHIVO = 100;
+    const archivoOrigen = path.join(__dirname, 'resultados', 'propiedades_estructuradas.json');
+    
+    if (!fsSync.existsSync(archivoOrigen)) {
+        console.log('Archivo origen no encontrado');
+        return;
+    }
+
+    const datos = JSON.parse(await fs.readFile(archivoOrigen, 'utf8'));
+    const propiedades = datos.propiedades || [];
+    
+    // Agrupar por ciudad
+    const porCiudad = {};
+    propiedades.forEach(prop => {
+        const ciudad = prop.ubicacion?.ciudad || 'sin_ciudad';
+        if (!porCiudad[ciudad]) porCiudad[ciudad] = [];
+        porCiudad[ciudad].push(prop);
+    });
+
+    // Crear directorios y archivos
+    for (const [ciudad, props] of Object.entries(porCiudad)) {
+        const ciudadPath = path.join(__dirname, 'resultados', 'propiedades', ciudad);
+        await fs.mkdir(ciudadPath, { recursive: true });
+
+        for (let i = 0; i < props.length; i += PROPIEDADES_POR_ARCHIVO) {
+            const chunk = props.slice(i, i + PROPIEDADES_POR_ARCHIVO);
+            const nombreArchivo = `${Math.floor(i/PROPIEDADES_POR_ARCHIVO) + 1}.json`;
+            await fs.writeFile(
+                path.join(ciudadPath, nombreArchivo),
+                JSON.stringify(chunk, null, 2)
+            );
+        }
+    }
+
+    // Crear índices
+    const indicesPath = path.join(__dirname, 'resultados', 'indices');
+    await fs.mkdir(indicesPath, { recursive: true });
+
+    // Índice de ciudades
+    const ciudades = Object.keys(porCiudad).map(ciudad => ({
+        nombre: ciudad,
+        total: porCiudad[ciudad].length
+    }));
+    await fs.writeFile(
+        path.join(indicesPath, 'ciudades.json'),
+        JSON.stringify(ciudades, null, 2)
+    );
+
+    // Índice de tipos de propiedad
+    const tiposPropiedad = new Map();
+    propiedades.forEach(prop => {
+        const tipo = prop.propiedad?.tipo_propiedad;
+        if (tipo) {
+            tiposPropiedad.set(tipo, (tiposPropiedad.get(tipo) || 0) + 1);
+        }
+    });
+    await fs.writeFile(
+        path.join(indicesPath, 'tipos_propiedad.json'),
+        JSON.stringify(Array.from(tiposPropiedad.entries()), null, 2)
+    );
+
+    console.log('División de archivos completada');
+}
+
+// Ruta para iniciar la división de archivos
+app.post('/api/admin/dividir-archivos', async (req, res) => {
+    try {
+        await dividirArchivoPropiedades();
+        res.json({ mensaje: 'División de archivos completada' });
+    } catch (error) {
+        console.error('Error dividiendo archivos:', error);
+        res.status(500).json({ error: 'Error dividiendo archivos' });
+    }
+});
+
+// Función para cargar propiedades de una ciudad
+async function cargarPropiedades(ciudad) {
+    try {
+        // Si no se especifica ciudad, cargar todas las propiedades
+        if (!ciudad) {
+            const propiedadesPath = path.join(__dirname, 'resultados', 'propiedades_estructuradas.json');
+            const data = await fs.readFile(propiedadesPath, 'utf8');
+            return JSON.parse(data);
+        }
+
+        // Si la ciudad está en caché y es válida, usarla
+        if (cache.propiedadesPorCiudad.has(ciudad) && 
+            Date.now() - cache.ultimaActualizacion < CACHE_DURATION) {
+            return cache.propiedadesPorCiudad.get(ciudad);
+        }
+
+        // Cargar propiedades de la ciudad desde el archivo
+        const ciudadPath = path.join(__dirname, 'resultados', 'propiedades', ciudad, 'propiedades.json');
+        try {
+            const data = await fs.readFile(ciudadPath, 'utf8');
+            const propiedades = JSON.parse(data);
+            
+            // Guardar en caché
+            cache.propiedadesPorCiudad.set(ciudad, propiedades);
+            
+            return propiedades;
+        } catch (error) {
+            console.error(`Error al cargar propiedades de ${ciudad}:`, error);
+            // Si falla cargar el archivo por ciudad, intentar filtrar del archivo principal
+            const propiedadesPath = path.join(__dirname, 'resultados', 'propiedades_estructuradas.json');
+            const data = await fs.readFile(propiedadesPath, 'utf8');
+            const todasPropiedades = JSON.parse(data);
+            
+            // Filtrar por ciudad
+            const propiedadesCiudad = todasPropiedades.filter(p => 
+                p.ubicacion?.ciudad?.toLowerCase() === ciudad.toLowerCase()
+            );
+            
+            // Guardar en caché
+            cache.propiedadesPorCiudad.set(ciudad, propiedadesCiudad);
+            
+            return propiedadesCiudad;
+        }
+    } catch (error) {
+        console.error('Error al cargar propiedades:', error);
+        return [];
+    }
+}
+
+// Función auxiliar para extraer el valor numérico del precio
+function extraerValorPrecio(precio) {
+    if (!precio) return 0;
+    
+    if (typeof precio === 'number') return precio;
+    
+    if (typeof precio === 'object' && precio.valor) {
+        return parseFloat(precio.valor) || 0;
+    }
+    
+    if (typeof precio === 'string') {
+        const numero = precio.replace(/[^0-9.]/g, '');
+        return parseFloat(numero) || 0;
+    }
+    
+    return 0;
+}
+
+// Iniciar el servidor
+const server = app.listen(port, () => {
+    console.log(`Servidor corriendo en http://localhost:${port}`);
+});
+
+// Configuración de timeouts
+server.timeout = 300000; // 5 minutos
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
+// Manejo de errores del servidor
+server.on('error', (error) => {
+    console.error('Error en el servidor:', error);
+    if (error.syscall !== 'listen') {
+        throw error;
+    }
+
+    switch (error.code) {
+        case 'EACCES':
+            console.error(`El puerto ${port} requiere privilegios elevados`);
+            process.exit(1);
+            break;
+        case 'EADDRINUSE':
+            console.error(`El puerto ${port} ya está en uso`);
+            process.exit(1);
+            break;
+        default:
+            throw error;
+    }
+});
+
+// Manejo de señales de terminación
+process.on('SIGTERM', () => {
+    console.log('Recibida señal SIGTERM. Cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado.');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Recibida señal SIGINT. Cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado.');
+        process.exit(0);
+    });
+});
+
+// Manejo de excepciones no capturadas
+process.on('uncaughtException', (err) => {
+    console.error('Excepción no capturada:', err);
+    server.close(() => {
+        console.log('Servidor cerrado debido a error.');
+        process.exit(1);
+    });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Promesa rechazada no manejada:', reason);
+});
