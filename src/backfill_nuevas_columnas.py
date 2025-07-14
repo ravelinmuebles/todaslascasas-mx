@@ -28,6 +28,7 @@ from typing import List, Tuple
 
 import psycopg2
 from psycopg2.extras import execute_batch
+from tqdm import tqdm
 
 # Reutilizar lógica existente
 sys.path.append(os.path.dirname(__file__))
@@ -125,7 +126,7 @@ def main():
     logger.info("Propiedades a evaluar: %s", len(rows))
 
     updates: List[Tuple] = []
-    for row in rows:
+    for row in tqdm(rows, desc="Procesando", unit="prop"):
         id_prop = row[0]
         nuevos = procesar_registro(row)
         if any(v is not None for v in nuevos):
@@ -150,7 +151,9 @@ def main():
     )
 
     logger.info("Ejecutando UPDATEs en lotes de %s…", batch_size)
-    execute_batch(cur, update_sql, updates, page_size=batch_size)
+    for i in tqdm(range(0, len(updates), batch_size), desc="Actualizando", unit="lote"):
+        lote = updates[i:i+batch_size]
+        execute_batch(cur, update_sql, lote, page_size=batch_size)
     conn.commit()
     logger.info("✅ Backfill completado y confirmado")
 
