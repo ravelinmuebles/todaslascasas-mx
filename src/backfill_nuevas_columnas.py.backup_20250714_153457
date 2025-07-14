@@ -33,7 +33,7 @@ from tqdm import tqdm
 # Reutilizar lógica existente
 sys.path.append(os.path.dirname(__file__))
 from modules.caracteristicas import extraer_niveles  # type: ignore
-from modules.seguridad import actualizar_seguridad           # type: ignore
+from seguridad import actualizar_seguridad           # type: ignore
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("backfill")
