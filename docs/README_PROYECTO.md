@@ -1,5 +1,40 @@
 # Proyecto TodasLasCasas – Manual Definitivo
 
+## 0. TL;DR para IAs 🤖
+Si eres un agente IA y necesitas operar este repositorio, aquí tienes la mínima información imprescindible:
+
+1. Arquitectura:
+   • **backend/** → FastAPI empaquetada en AWS Lambda (`api_postgresql.py`) y expuesta vía API Gateway.<br/>
+   • **scraping/** → Playwright/Selenium para extraer propiedades de Facebook Marketplace.<br/>
+   • **frontend/** → `index.html` estático consumiendo la API; vive en S3 + CloudFront.
+2. Despliegue rápido:
+   ```bash
+   make build            # genera lambda.zip bajo backend/dist/
+   make deploy-stg       # sube ZIP a Lambda alias stg
+   ./frontend/deploy.sh  # publica index_s3_latest.html a /stg/
+   ./frontend/deploy.sh --prod  # publica a producción e invalida CF
+   ```
+3. Endpoints principales:
+   • `GET  /health` → JSON `{"status":"ok"}`<br/>
+   • `GET  /propiedades?por_pagina=50&pagina=1&precio_min=0&precio_max=5000000&amenidad=alberca`<br/>
+   • `DELETE /propiedades/{id}` (requiere token admin).
+4. Bases de datos: PostgreSQL (RDS) accesible vía `DATABASE_URL` env. Tablas `propiedades`, `favoritos`, etc.
+5. Variables de entorno críticas:
+   - `DATABASE_URL` (Postgres URI)
+   - `JWT_SECRET`
+6. Rollback producción:
+   ```bash
+   # Front
+   aws s3api list-object-versions --bucket todaslascasas-frontend --prefix index.html | less
+   aws s3 cp s3://todaslascasas-frontend/index.html?versionId=<id> index.html && ./frontend/deploy.sh --prod
+
+   # Backend
+   aws lambda update-alias --function-name todaslascasas-api-dev-api --name live --function-version <prev>
+   ```
+7. Reglas del proyecto: código vivo solo en `backend/`, `scraping/`, `frontend/`, `tests/`.
+
+> Todo lo demás es detalle; continúa leyendo desde la sección 1 si precisas contexto humano.
+
 > Guarda este archivo. Cuando me falte contexto, entrégame su nombre `docs/README_PROYECTO.md` y lo leeré para retomar todo.
 
 ## 1. Propósito
@@ -49,6 +84,33 @@ legacy/          # Backups, .bak, zips, versiones antiguas
 6. Verificación manual rápida.
 7. PR `staging`→`main`; al merge se despliega a prod y se crea tag.
 8. Borrar la rama local: `git branch -d feature/*`.
+
+### 3.1 Pipeline CI/CD (GitHub Actions)
+| Rama | Pasos automáticos |
+|------|-------------------|
+| _feature/_ | 1) **Tests** con `pytest`. |
+| **staging** | 1) Tests → 2) `make build` (crea `lambda.zip`) → 3) `make deploy-stg` (Lambda alias **stg**) → 4) `frontend/deploy.sh` (sube a *s3://…/stg/index.html* + invalidación `/stg/*`). |
+| **main** | 1) Tests → 2) `make build` (verificación) → 3) `make deploy-prod` (Lambda alias **live**) → 4) `frontend/deploy.sh --prod` (sobrescribe *index.html* + invalidación `/index.html`) → 5) `git tag front-vX.Y.Z` & `backend-vA.B.C`. |
+
+> El front se publica automáticamente porque `frontend/deploy.sh` se invoca dentro del workflow; no requiere pasos manuales.
+
+### 3.2 Conexión GitHub → AWS
+El archivo `.github/workflows/ci.yml` se autentica con AWS mediante un **usuario IAM** de mínimos privilegios:
+
+* `lambda:UpdateFunctionCode`, `lambda:PublishVersion`, `lambda:UpdateAlias`
+* `s3:PutObject`, `s3:GetObjectVersion`, `s3:ListBucket`
+* `cloudfront:CreateInvalidation`
+
+Las claves se guardan en **GitHub Secrets**:
+```
+AWS_ACCESS_KEY_ID      # Access key del usuario CI
+AWS_SECRET_ACCESS_KEY  # Secret key CI
+AWS_DEFAULT_REGION=us-east-1 (opcional, se fija en el workflow)
+```
+Con esto el push a GitHub es suficiente para:
+1. Construir el paquete Lambda y publicarlo.
+2. Subir el HTML a S3.
+3. Invalidar CloudFront.
 
 ---
 
