@@ -167,3 +167,10 @@ refactor: cambio interno sin alterar funcionalidad
 – TODO el código de producción vive en `backend/`, `scraping/`, `frontend/`, `tests/`.
 – **legacy/** es solo archivo histórico; NO editar ahí.
 – Cualquier duda o contexto, este documento es la fuente de verdad. 
+
+10. Comunicación
+    • Explica los pasos; cita líneas con formato `12:15:archivo.js`.  
+    • Si algo falla, primero diagnostica, luego corrige, luego prueba, luego despliega.
+
+11. Automatización
+    • El asistente (IA) ejecutará por ti los pasos de Git (branch, commit, push), creará PR a `staging`, configurará *auto-merge* y realizará el despliegue manual en caso de emergencia. 
