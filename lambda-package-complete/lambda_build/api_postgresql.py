@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 import pg8000
 import json
@@ -100,6 +100,7 @@ class PropiedadResumen(BaseModel):
     caracteristicas: Optional[Dict]
     # 🎯 PABLO: AGREGAR UBICACION COMPLETA
     ubicacion: Optional[Dict]
+    model_config = ConfigDict(extra="allow")
 
 class PropiedadCompleta(BaseModel):
     id: str
@@ -125,6 +126,7 @@ class PropiedadCompleta(BaseModel):
     created_at: Optional[datetime]
     # 🎯 PABLO: AGREGAR UBICACION COMPLETA
     ubicacion: Optional[Dict]
+    model_config = ConfigDict(extra="allow")
 
 class RespuestaPaginada(BaseModel):
     propiedades: List[PropiedadResumen]
@@ -415,8 +417,16 @@ async def listar_propiedades(
     if tipo_propiedad and len(tipo_propiedad) > 0:
         tp_conditions = []
         for tp in tipo_propiedad:
-            tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
-            params.append(tp)
+            tp_low = tp.lower()
+            if "local" in tp_low:
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append("%local%")
+            elif "oficina" in tp_low:
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append("%oficina%")
+            else:
+                tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
+                params.append(tp)
         where_conditions.append(f"({' OR '.join(tp_conditions)})")
     
     # FILTROS DE PRECIO
@@ -551,7 +561,8 @@ async def listar_propiedades(
         direccion, estado, url_original, url_original as link,
         recamaras, banos, estacionamientos, superficie_construida as superficie_m2,
         amenidades, caracteristicas,
-        -- 🎯 PABLO: CREAR OBJETO UBICACION DINÁMICAMENTE
+        caseta_vigilancia, camaras_seguridad, vigilancia_24h, acceso_controlado,
+        niveles, recamara_planta_baja,
         json_build_object(
             'direccion_completa', COALESCE(direccion, ciudad || CASE WHEN estado IS NOT NULL THEN ', ' || estado ELSE '' END),
             'ciudad', ciudad,
@@ -630,7 +641,8 @@ async def obtener_propiedad(propiedad_id: str):
             THEN imagenes->>0 
             ELSE NULL 
         END as imagen_url,
-        -- 🎯 PABLO: CREAR OBJETO UBICACION DINÁMICAMENTE
+        caseta_vigilancia, camaras_seguridad, vigilancia_24h, acceso_controlado,
+        niveles, recamara_planta_baja,
         json_build_object(
             'direccion_completa', COALESCE(direccion, ciudad || CASE WHEN estado IS NOT NULL THEN ', ' || estado ELSE '' END),
             'ciudad', ciudad,
@@ -691,7 +703,8 @@ async def buscar_propiedades(
         direccion, estado, url_original, url_original as link, 
         recamaras, banos, estacionamientos, superficie_construida as superficie_m2,
         amenidades, caracteristicas,
-        -- 🎯 PABLO: CREAR OBJETO UBICACION DINÁMICAMENTE
+        caseta_vigilancia, camaras_seguridad, vigilancia_24h, acceso_controlado,
+        niveles, recamara_planta_baja,
         json_build_object(
             'direccion_completa', COALESCE(direccion, ciudad || CASE WHEN estado IS NOT NULL THEN ', ' || estado ELSE '' END),
             'ciudad', ciudad,
