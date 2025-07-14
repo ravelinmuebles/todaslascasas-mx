@@ -176,7 +176,11 @@ refactor: cambio interno sin alterar funcionalidad
 5. **Backend** – pytest + Makefile; SQL con COALESCE.
 6. **Versionado** – actualizar badge y crear tags semver.
 7. **Deploy manual** – solo emergencias; luego commit & PR.
-8. **Pruebas** – automatizar todo filtro nuevo.
+8. **Pruebas** – La suite Playwright/Selenium debe cubrir **todos** los filtros (ciudad, tipo, precio, seguridad, etc.).  Antes de entregar resultados finales o desplegar a producción se ejecuta la suite completa y se verifica que:  
+   • Cada filtro devuelve ≥ 1 tarjeta.  
+   • No hay errores en la consola del navegador ni en la respuesta API.  
+   • Se registran screenshots/logs ante fallos.  
+   Cualquier fallo bloquea el merge a `main`.
 9. **Limpieza** – código vivo solo en carpetas principales.
 10. **Comunicación** – explica pasos y cita líneas.
 11. **Automatización** – la IA ejecuta Git, PR, auto-merge y despliegues. 
