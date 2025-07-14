@@ -168,9 +168,15 @@ refactor: cambio interno sin alterar funcionalidad
 – **legacy/** es solo archivo histórico; NO editar ahí.
 – Cualquier duda o contexto, este documento es la fuente de verdad. 
 
-10. Comunicación
-    • Explica los pasos; cita líneas con formato `12:15:archivo.js`.  
-    • Si algo falla, primero diagnostica, luego corrige, luego prueba, luego despliega.
-
-11. Automatización
-    • El asistente (IA) ejecutará por ti los pasos de Git (branch, commit, push), creará PR a `staging`, configurará *auto-merge* y realizará el despliegue manual en caso de emergencia. 
+## 9. Reglas Operativas
+1. **Contexto obligatorio** – leer siempre este README; respuesta en español.
+2. **Flujo Git** – rama ➜ commit ➜ push ➜ PR a `staging`.
+3. **CI/CD** – Tests, build, deploy stg/main como se describe arriba.
+4. **Frontend** – probar filtros con Playwright/Selenium; subir versión HTML.
+5. **Backend** – pytest + Makefile; SQL con COALESCE.
+6. **Versionado** – actualizar badge y crear tags semver.
+7. **Deploy manual** – solo emergencias; luego commit & PR.
+8. **Pruebas** – automatizar todo filtro nuevo.
+9. **Limpieza** – código vivo solo en carpetas principales.
+10. **Comunicación** – explica pasos y cita líneas.
+11. **Automatización** – la IA ejecuta Git, PR, auto-merge y despliegues. 
