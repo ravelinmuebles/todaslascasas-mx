@@ -20,6 +20,7 @@
     <!-- Versión v3.3.19-23 - backend soporta seguridad + front badge actualizado - 14/07/2025 -->
     <!-- Versión v3.3.20-24 -->
     <!-- Versión v3.3.21-25 -->
+    <!-- Versión v3.3.21-28 -->
     <style>
         * {
             margin: 0;
@@ -760,7 +761,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-25</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-28</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1329,6 +1330,19 @@
             }
 
             // Para los casos restantes podemos apoyarnos en la API cuando no sea necesario filtrado local complejo
+            // Si el usuario estableció un rango de precio o está ordenando por precio necesitamos el dataset completo
+            const sortValTmp = document.getElementById('sort-select').value;
+            const orderingByPriceTmp = sortValTmp && sortValTmp.startsWith('precio');
+            const priceRangeActiveTmp = priceMinVal > 0 || priceMaxVal < Infinity;
+            if ((orderingByPriceTmp || priceRangeActiveTmp) && currentLimit !== 6160) {
+                currentLimit = 6160; // ampliar límite sólo una vez
+                const pagSelect = document.getElementById('pagination-select');
+                if(pagSelect) pagSelect.value = '6160';
+                currentFilters = buildApiFilters();
+                loadProperties(1, currentLimit, currentFilters);
+                return;
+            }
+
             if (currentLimit !== 6160) {
                 currentFilters = buildApiFilters();
                 loadProperties(1, currentLimit, currentFilters);
@@ -1962,12 +1976,24 @@
         }
 
         function sortProperties(){
-            const limitAll = currentLimit === 6160;
-            if(limitAll){
+            const sortVal = document.getElementById('sort-select').value;
+
+            // Si es orden por precio y aún usamos paginación parcial → pedir al backend
+            // todo el dataset directamente ordenado y filtrado.
+            if(sortVal && sortVal.startsWith('precio') && currentLimit !== 6160){
+                currentLimit = 6160;
+                const pagSel = document.getElementById('pagination-select');
+                if(pagSel) pagSel.value = '6160';
+                currentFilters = buildApiFilters();
+                loadProperties(1, currentLimit, currentFilters);
+                return;
+            }
+
+            if(currentLimit === 6160){
                 sortFilteredProperties();
                 renderProperties();
             }else{
-                // Vía API: refrescar datos con nuevo orden
+                // Para otros casos bastará pedir la página actual con nuevo orden.
                 currentFilters = buildApiFilters();
                 loadProperties(1, currentLimit, currentFilters);
             }
@@ -2234,18 +2260,8 @@
             }catch(e){alert('Error:'+e);} 
         }
 
-        const sort = document.getElementById('sort-select').value;
-        if (sort.startsWith('precio')) filters.orden = sort;
-
-        // Si el usuario ordena por precio y aún no hemos cargado todo, forzar carga completa
-        const priceMinInput = document.getElementById('price-min').value;
-        const priceMaxInput = document.getElementById('price-max').value;
-        const orderingByPrice = sort.startsWith('precio');
-        const priceRangeActive = priceMinInput || priceMaxInput;
-        if ((orderingByPrice || priceRangeActive) && currentLimit !== 6160) {
-            pendingApply = true;
-            changePaginationLimit(6160);
-        }
+        // (Bloque eliminado: la lógica para forzar carga completa cuando se ordena por precio
+        // ahora se maneja dentro de sortProperties().)
     </script>
 </body>
 </html> 
