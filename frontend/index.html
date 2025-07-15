@@ -23,6 +23,7 @@
     <!-- Versión v3.3.21-28 -->
     <!-- Versión v3.3.21-29 - bugfix fetch filtros precio - 15/07/2025 -->
     <!-- Versión v3.3.21-30 - refinamiento filtros precio backend - 15/07/2025 -->
+    <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -763,7 +764,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-30</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-33</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -816,8 +817,8 @@
             <div class="filter-group">
                 <label class="filter-label">Rango de Precio</label>
                 <div class="price-range">
-                    <input type="number" class="filter-input" id="price-min" placeholder="Mín">
-                    <input type="number" class="filter-input" id="price-max" placeholder="Máx">
+                    <input type="text" class="filter-input" id="price-min" placeholder="Mín" pattern="[0-9,\.]+" inputmode="numeric">
+                    <input type="text" class="filter-input" id="price-max" placeholder="Máx" pattern="[0-9,\.]+" inputmode="numeric">
                     </div>
                     </div>
 
@@ -1249,8 +1250,10 @@
             if (search) filters.search = search;
             
             // Precio
-            const priceMin = document.getElementById('price-min').value;
-            const priceMax = document.getElementById('price-max').value;
+            const priceMinRaw = document.getElementById('price-min').value.replace(/[^0-9]/g, '');
+            const priceMaxRaw = document.getElementById('price-max').value.replace(/[^0-9]/g, '');
+            const priceMin = priceMinRaw ? parseInt(priceMinRaw, 10) : '';
+            const priceMax = priceMaxRaw ? parseInt(priceMaxRaw, 10) : '';
             if (priceMin) filters.precio_min = priceMin;
             if (priceMax) filters.precio_max = priceMax;
             
@@ -1310,8 +1313,8 @@
             const advRecPb         = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb => cb.value);
             const advLegal          = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb => cb.value);
 
-            const priceMinVal = parseFloat(document.getElementById('price-min').value) || 0;
-            const priceMaxVal = parseFloat(document.getElementById('price-max').value) || Infinity;
+            const priceMinVal = parseInt(document.getElementById('price-min').value.replace(/[^0-9]/g, '')) || 0;
+            const priceMaxVal = parseInt(document.getElementById('price-max').value.replace(/[^0-9]/g, '')) || Infinity;
             // ciudadFilters ya calculado más arriba, evitar redeclarar
             const ciudadFilters = Array.from(document.querySelectorAll('#ciudad-container input:checked')).map(cb => cb.value.toLowerCase());
 
@@ -1337,6 +1340,12 @@
             const orderingByPriceTmp = sortValTmp && sortValTmp.startsWith('precio');
             const priceRangeActiveTmp = priceMinVal > 0 || priceMaxVal < Infinity;
             if (orderingByPriceTmp || priceRangeActiveTmp) {
+                // Evitar descargar 6k+ registros: limitamos a 500 para rapidez
+                const effectiveLimit = currentLimit === 6160 ? 500 : currentLimit;
+                currentLimit = effectiveLimit;            // mantener valor consistente
+                // Reiniciar dataset para evitar residuos de consultas previas
+                allProperties = [];
+                filteredProperties = [];
                 currentFilters = buildApiFilters();
                 loadProperties(1, currentLimit, currentFilters);
                 return;
@@ -1349,8 +1358,8 @@
             }
             
             const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
-            const priceMin = parseFloat(document.getElementById('price-min').value) || 0;
-            const priceMax = parseFloat(document.getElementById('price-max').value) || Infinity;
+            const priceMin = parseInt(document.getElementById('price-min').value.replace(/[^0-9]/g, '')) || 0;
+            const priceMax = parseInt(document.getElementById('price-max').value.replace(/[^0-9]/g, '')) || Infinity;
             
             // Bandera para saber si hay algún filtro activo
             const anyFilterActive = !!searchTerm || priceMin > 0 || priceMax < Infinity;
