@@ -19,6 +19,7 @@
     <!-- Versión v3.3.18-22 - backend soporta seguridad + front badge actualizado - 14/07/2025 -->
     <!-- Versión v3.3.19-23 - backend soporta seguridad + front badge actualizado - 14/07/2025 -->
     <!-- Versión v3.3.20-24 -->
+    <!-- Versión v3.3.21-25 -->
     <style>
         * {
             margin: 0;
@@ -759,7 +760,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.20-24</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-25</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1314,9 +1315,8 @@
             // Obtener tipos seleccionados ANTES de usarlos en needsLocalTipo
             const tipoFiltersEarly = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
 
-            const needsLocalTipo = (tipoFiltersEarly.includes('local') || tipoFiltersEarly.includes('oficina'));
-            // Desde que el backend maneja precio y seguridad, sólo requerimos dataset completo cuando
-            // el tipo de propiedad es "local" u "oficina" (el backend aún no los devuelve).
+            // El backend ya soporta Local y Oficina
+            const needsLocalTipo = false;
             const needsLocal = needsLocalTipo;
 
             // Si estamos usando paginación parcial y el usuario selecciona filtros que sólo funcionan localmente,
