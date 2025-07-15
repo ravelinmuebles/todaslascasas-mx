@@ -26,6 +26,7 @@ import jwt
 from passlib.context import CryptContext
 import secrets
 import os
+from fastapi.params import Param  # ↳ para detectar objetos Query/Param
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
@@ -396,9 +397,28 @@ async def listar_propiedades(
     # SANITIZACIÓN DE PARÁMETROS 🛡️
     # Evita que objetos `Query` (FastAPI) o valores no válidos rompan la SQL
     # ---------------------------------------------------------------
+    def _is_param(value):
+        """Detecta objetos derivados de fastapi.params (Query, ParamInfo, etc.)."""
+        try:
+            from fastapi.params import Param  # type: ignore
+            return isinstance(value, Param) or value.__class__.__name__ in {"Query", "ParamInfo"}
+        except Exception:
+            return False
+
     def _ensure_list(value):
-        """Convierte en lista sólo si ya es list; de lo contrario devuelve None."""
+        """Devuelve una lista válida o None.
+
+        – Si el valor proviene de FastAPI (Query/Param) → None
+        – Si ya es list → se devuelve tal cual
+        – Cualquier otro tipo → None
+        """
+        if value is None or _is_param(value):
+            return None
         return value if isinstance(value, list) else None
+
+    def _null_if_param(value):
+        """Convierte en None si el valor proviene de fastapi.params.*"""
+        return None if _is_param(value) else value
 
     ciudad = _ensure_list(ciudad)
     tipo_operacion = _ensure_list(tipo_operacion)
@@ -411,17 +431,10 @@ async def listar_propiedades(
     documentacion = _ensure_list(documentacion)
     caracteristicas_adicionales = _ensure_list(caracteristicas_adicionales)
 
-    # Parámetros numéricos: cast seguro o descartar
-    try:
-        precio_min = float(precio_min) if precio_min is not None else None
-    except (TypeError, ValueError):
-        precio_min = None
+    # Limpiar parámetros numéricos
+    precio_min = _null_if_param(precio_min)
+    precio_max = _null_if_param(precio_max)
 
-    try:
-        precio_max = float(precio_max) if precio_max is not None else None
-    except (TypeError, ValueError):
-        precio_max = None
-    
     # Construir WHERE clause - sin forzar columna 'activo' (no existe en algunos registros)
     where_conditions = ["1=1"]
     params = []
