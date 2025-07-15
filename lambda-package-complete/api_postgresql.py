@@ -392,6 +392,36 @@ async def listar_propiedades(
     if city_legacy and not ciudad:
         ciudad = city_legacy
     
+    # ────────────────────────────────
+    # SANITIZACIÓN DE PARÁMETROS 🛡️
+    # Evita que objetos `Query` (FastAPI) o valores no válidos rompan la SQL
+    # ---------------------------------------------------------------
+    def _ensure_list(value):
+        """Convierte en lista sólo si ya es list; de lo contrario devuelve None."""
+        return value if isinstance(value, list) else None
+
+    ciudad = _ensure_list(ciudad)
+    tipo_operacion = _ensure_list(tipo_operacion)
+    tipo_propiedad = _ensure_list(tipo_propiedad)
+    recamaras = _ensure_list(recamaras)
+    banos = _ensure_list(banos)
+    estacionamientos = _ensure_list(estacionamientos)
+    niveles = _ensure_list(niveles)
+    amenidad = _ensure_list(amenidad)
+    documentacion = _ensure_list(documentacion)
+    caracteristicas_adicionales = _ensure_list(caracteristicas_adicionales)
+
+    # Parámetros numéricos: cast seguro o descartar
+    try:
+        precio_min = float(precio_min) if precio_min is not None else None
+    except (TypeError, ValueError):
+        precio_min = None
+
+    try:
+        precio_max = float(precio_max) if precio_max is not None else None
+    except (TypeError, ValueError):
+        precio_max = None
+    
     # Construir WHERE clause - sin forzar columna 'activo' (no existe en algunos registros)
     where_conditions = ["1=1"]
     params = []
