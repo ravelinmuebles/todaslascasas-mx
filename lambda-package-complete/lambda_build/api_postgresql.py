@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 import pg8000
 import json
@@ -100,6 +100,7 @@ class PropiedadResumen(BaseModel):
     caracteristicas: Optional[Dict]
     # 🎯 PABLO: AGREGAR UBICACION COMPLETA
     ubicacion: Optional[Dict]
+    model_config = ConfigDict(extra="allow")
 
 class PropiedadCompleta(BaseModel):
     id: str
@@ -125,6 +126,7 @@ class PropiedadCompleta(BaseModel):
     created_at: Optional[datetime]
     # 🎯 PABLO: AGREGAR UBICACION COMPLETA
     ubicacion: Optional[Dict]
+    model_config = ConfigDict(extra="allow")
 
 class RespuestaPaginada(BaseModel):
     propiedades: List[PropiedadResumen]
@@ -338,7 +340,9 @@ async def root():
 @app.get("/propiedades", response_model=RespuestaPaginada)
 async def listar_propiedades(
     pagina: int = Query(1, ge=1, description="Número de página"),
-    por_pagina: int = Query(12, ge=1, le=500, description="Propiedades por página"),
+    # Permitir lotes grandes (scraping front-end necesita dataset completo)
+    # Incrementamos el límite de 500 → 12000 para cubrir el inventario completo y algo de margen.
+    por_pagina: int = Query(12, ge=1, le=12000, description="Propiedades por página"),
     limit_legacy: Optional[int] = Query(None, alias="limit"),
     page_legacy: Optional[int] = Query(None, alias="page"),
     search_legacy: Optional[str] = Query(None, alias="search"),
@@ -357,7 +361,9 @@ async def listar_propiedades(
     documentacion: Optional[List[str]] = Query(None, description="Filtrar por documentación"),
     caracteristicas_adicionales: Optional[List[str]] = Query(None, description="Filtrar por características adicionales"),
     q: Optional[str] = Query(None, description="Búsqueda de texto"),
-    orden: Optional[str] = Query("created_at", description="Campo para ordenar")
+    orden: Optional[str] = Query("created_at", description="Campo para ordenar"),
+    niveles: Optional[List[int]] = Query(None, description="Número de niveles"),
+    recamara_planta_baja: Optional[bool] = Query(None, description="Filtrar por recámara en planta baja"),
 ):
     """
     Lista propiedades con paginación y filtros FUNCIONALES
@@ -369,8 +375,9 @@ async def listar_propiedades(
     """
     
     # Mapear legacy
+    # Compatibilidad con parámetro legacy "limit" — mantiene el mismo tope que por_pagina (12 000)
     if limit_legacy and not por_pagina:
-        por_pagina = limit_legacy if limit_legacy<=500 else 500
+        por_pagina = limit_legacy if limit_legacy<=12000 else 12000
     if page_legacy and pagina==1:
         pagina = page_legacy
     if search_legacy and not q:
@@ -415,8 +422,16 @@ async def listar_propiedades(
     if tipo_propiedad and len(tipo_propiedad) > 0:
         tp_conditions = []
         for tp in tipo_propiedad:
-            tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
-            params.append(tp)
+            tp_low = tp.lower()
+            if "local" in tp_low:
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append("%local%")
+            elif "oficina" in tp_low:
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append("%oficina%")
+            else:
+                tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
+                params.append(tp)
         where_conditions.append(f"({' OR '.join(tp_conditions)})")
     
     # FILTROS DE PRECIO
@@ -523,6 +538,23 @@ async def listar_propiedades(
         if caracteristicas_adicionales_conditions:
             where_conditions.append(f"({' OR '.join(caracteristicas_adicionales_conditions)})")
     
+    # FILTRO DE NIVELES
+    if niveles and len(niveles) > 0:
+        niv_conditions = []
+        for niv in niveles:
+            if niv >= 3:
+                niv_conditions.append("niveles >= %s")
+                params.append(3)
+            else:
+                niv_conditions.append("niveles = %s")
+                params.append(niv)
+        if niv_conditions:
+            where_conditions.append(f"({' OR '.join(niv_conditions)})")
+
+    # Recámara en planta baja
+    if recamara_planta_baja:
+        where_conditions.append("recamara_planta_baja = true")
+    
     where_clause = " AND ".join(where_conditions)
     
     # Validar campo de orden
@@ -551,7 +583,8 @@ async def listar_propiedades(
         direccion, estado, url_original, url_original as link,
         recamaras, banos, estacionamientos, superficie_construida as superficie_m2,
         amenidades, caracteristicas,
-        -- 🎯 PABLO: CREAR OBJETO UBICACION DINÁMICAMENTE
+        caseta_vigilancia, camaras_seguridad, vigilancia_24h, acceso_controlado,
+        niveles, recamara_planta_baja,
         json_build_object(
             'direccion_completa', COALESCE(direccion, ciudad || CASE WHEN estado IS NOT NULL THEN ', ' || estado ELSE '' END),
             'ciudad', ciudad,
@@ -630,7 +663,8 @@ async def obtener_propiedad(propiedad_id: str):
             THEN imagenes->>0 
             ELSE NULL 
         END as imagen_url,
-        -- 🎯 PABLO: CREAR OBJETO UBICACION DINÁMICAMENTE
+        caseta_vigilancia, camaras_seguridad, vigilancia_24h, acceso_controlado,
+        niveles, recamara_planta_baja,
         json_build_object(
             'direccion_completa', COALESCE(direccion, ciudad || CASE WHEN estado IS NOT NULL THEN ', ' || estado ELSE '' END),
             'ciudad', ciudad,
@@ -691,7 +725,8 @@ async def buscar_propiedades(
         direccion, estado, url_original, url_original as link, 
         recamaras, banos, estacionamientos, superficie_construida as superficie_m2,
         amenidades, caracteristicas,
-        -- 🎯 PABLO: CREAR OBJETO UBICACION DINÁMICAMENTE
+        caseta_vigilancia, camaras_seguridad, vigilancia_24h, acceso_controlado,
+        niveles, recamara_planta_baja,
         json_build_object(
             'direccion_completa', COALESCE(direccion, ciudad || CASE WHEN estado IS NOT NULL THEN ', ' || estado ELSE '' END),
             'ciudad', ciudad,

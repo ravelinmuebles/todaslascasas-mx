@@ -180,6 +180,7 @@ refactor: cambio interno sin alterar funcionalidad
    • Cada filtro devuelve ≥ 1 tarjeta.  
    • No hay errores en la consola del navegador ni en la respuesta API.  
    • Se registran screenshots/logs ante fallos.  
+   • Durante desarrollo local, **ejecutar Playwright/Selenium en modo _visible_ (headed)** para observar la interacción; en CI puede forzarse headless con la variable de entorno `HEADLESS=1`.
    Cualquier fallo bloquea el merge a `main`.
 9. **Limpieza** – código vivo solo en carpetas principales.
 10. **Comunicación** – explica pasos y cita líneas.
