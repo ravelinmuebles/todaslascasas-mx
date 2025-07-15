@@ -1428,14 +1428,24 @@ async def api_propiedades_compatibilidad(
                 where_conditions.append("LOWER(tipo_operacion) = %s")
                 params.append(tipo_operacion.lower())
         
-        # Filtro por precio
-        if precio_min is not None:
-            where_conditions.append("precio >= %s")
-            params.append(precio_min)
-        
-        if precio_max is not None:
-            where_conditions.append("precio <= %s")
-            params.append(precio_max)
+        # Filtro por precio (casteo seguro a numeric)
+        try:
+            precio_min_val = float(precio_min) if precio_min is not None else None
+        except (TypeError, ValueError):
+            precio_min_val = None
+
+        try:
+            precio_max_val = float(precio_max) if precio_max is not None else None
+        except (TypeError, ValueError):
+            precio_max_val = None
+
+        if precio_min_val is not None:
+            where_conditions.append("COALESCE(precio::numeric,0) >= %s")
+            params.append(precio_min_val)
+
+        if precio_max_val is not None:
+            where_conditions.append("COALESCE(precio::numeric,0) <= %s")
+            params.append(precio_max_val)
         
         # Filtro por ciudad
         if ciudad:
