@@ -1430,12 +1430,12 @@ async def api_propiedades_compatibilidad(
         
         # Filtro por precio (casteo seguro a numeric)
         try:
-            precio_min_val = float(precio_min) if precio_min is not None else None
+            precio_min_val = int(float(precio_min)) if precio_min is not None else None
         except (TypeError, ValueError):
             precio_min_val = None
 
         try:
-            precio_max_val = float(precio_max) if precio_max is not None else None
+            precio_max_val = int(float(precio_max)) if precio_max is not None else None
         except (TypeError, ValueError):
             precio_max_val = None
 
