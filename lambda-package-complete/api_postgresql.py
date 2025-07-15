@@ -486,11 +486,11 @@ async def listar_propiedades(
     if precio_min is not None:
         # Cast seguro incluso si la columna es texto o contiene NULL
         where_conditions.append("COALESCE(precio::numeric,0) >= %s")
-        params.append(precio_min)
+        params.append(str(precio_min))
     
     if precio_max is not None:
         where_conditions.append("COALESCE(precio::numeric,0) <= %s")
-        params.append(precio_max)
+        params.append(str(precio_max))
     
     # FILTROS DE CARACTERÍSTICAS - Múltiples valores
     if recamaras and isinstance(recamaras, list) and len(recamaras) > 0:
@@ -616,10 +616,20 @@ async def listar_propiedades(
     
     where_clause = " AND ".join(where_conditions)
     
-    # Validar campo de orden
+    # ───────── ORDEN DINÁMICO ─────────
     campos_validos = ['created_at', 'precio', 'titulo', 'recamaras', 'banos', 'estacionamientos', 'superficie_construida']
-    if orden not in campos_validos:
-        orden = 'created_at'
+    orden_campo = 'created_at'
+    orden_dir = 'DESC'
+
+    if orden:
+        partes = orden.split('_')
+        if len(partes) == 2 and partes[0] in campos_validos and partes[1].lower() in ['asc', 'desc']:
+            orden_campo = partes[0]
+            orden_dir = partes[1].upper()
+        elif orden in campos_validos:
+            orden_campo = orden
+            # Por defecto precio ASC, resto DESC
+            orden_dir = 'ASC' if orden == 'precio' else 'DESC'
     
     # Contar total de registros
     count_query = f"SELECT COUNT(*) FROM propiedades WHERE {where_clause}"
@@ -632,7 +642,8 @@ async def listar_propiedades(
     # Consulta principal con paginación - RUTAS DE IMÁGENES CORREGIDAS + UBICACION
     main_query = f"""
     SELECT 
-        id, titulo, descripcion, precio, ciudad, tipo_operacion, tipo_propiedad, autor,
+        id, titulo, descripcion, precio,
+        COALESCE(precio,0)::numeric AS precio_numerico, ciudad, tipo_operacion, tipo_propiedad, autor,
         CASE 
             WHEN imagenes IS NOT NULL AND jsonb_array_length(imagenes) > 0 
             THEN imagenes->>0 
@@ -656,14 +667,14 @@ async def listar_propiedades(
     WHERE {where_clause}
     ORDER BY 
         CASE 
-            WHEN '{orden}' = 'precio' AND (precio IS NULL OR precio = 0) THEN 1 
+            WHEN '{orden_campo}' = 'precio' AND (precio IS NULL OR precio = 0) THEN 1 
             ELSE 0 
         END,
         CASE 
             WHEN imagenes IS NOT NULL AND jsonb_array_length(imagenes) > 0 THEN 0
             ELSE 1 
         END,
-        {orden} {'ASC' if orden == 'precio' else 'DESC'} NULLS LAST,
+        {orden_campo} {orden_dir} NULLS LAST,
         created_at DESC
     LIMIT %s OFFSET %s
     """
@@ -715,7 +726,8 @@ async def obtener_propiedad(propiedad_id: str):
     
     query = """
     SELECT 
-        id, titulo, descripcion, precio, ciudad, tipo_operacion, tipo_propiedad, autor,
+        id, titulo, descripcion, precio,
+        COALESCE(precio,0)::numeric AS precio_numerico, ciudad, tipo_operacion, tipo_propiedad, autor,
         direccion, estado, url_original, url_original as link,
         recamaras, banos, estacionamientos, superficie_construida as superficie_m2,
         amenidades, caracteristicas, imagenes, created_at,
@@ -779,7 +791,8 @@ async def buscar_propiedades(
     # Consulta con búsqueda de texto completo mejorada
     search_query = """
     SELECT 
-        id, titulo, descripcion, precio, ciudad, tipo_operacion, tipo_propiedad, autor,
+        id, titulo, descripcion, precio,
+        COALESCE(precio,0)::numeric AS precio_numerico, ciudad, tipo_operacion, tipo_propiedad, autor,
         CASE 
             WHEN imagenes IS NOT NULL AND jsonb_array_length(imagenes) > 0 
             THEN imagenes->>0 
@@ -1441,11 +1454,11 @@ async def api_propiedades_compatibilidad(
 
         if precio_min_val is not None:
             where_conditions.append("COALESCE(precio::numeric,0) >= %s")
-            params.append(precio_min_val)
+            params.append(str(precio_min_val))
 
         if precio_max_val is not None:
             where_conditions.append("COALESCE(precio::numeric,0) <= %s")
-            params.append(precio_max_val)
+            params.append(str(precio_max_val))
         
         # Filtro por ciudad
         if ciudad:
