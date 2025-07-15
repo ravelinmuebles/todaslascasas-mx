@@ -392,8 +392,8 @@ async def listar_propiedades(
     if city_legacy and not ciudad:
         ciudad = city_legacy
     
-    # Construir WHERE clause - SOLO activo = true por defecto
-    where_conditions = ["activo = true"]
+    # Construir WHERE clause - sin forzar columna 'activo' (no existe en algunos registros)
+    where_conditions = ["1=1"]
     params = []
     
     # FILTRO DE BÚSQUEDA DE TEXTO
