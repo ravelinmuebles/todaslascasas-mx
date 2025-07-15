@@ -2228,6 +2228,19 @@
                 }
             }catch(e){alert('Error:'+e);} 
         }
+
+        const sort = document.getElementById('sort-select').value;
+        if (sort.startsWith('precio')) filters.orden = sort;
+
+        // Si el usuario ordena por precio y aún no hemos cargado todo, forzar carga completa
+        const priceMinInput = document.getElementById('price-min').value;
+        const priceMaxInput = document.getElementById('price-max').value;
+        const orderingByPrice = sort.startsWith('precio');
+        const priceRangeActive = priceMinInput || priceMaxInput;
+        if ((orderingByPrice || priceRangeActive) && currentLimit !== 6160) {
+            pendingApply = true;
+            changePaginationLimit(6160);
+        }
     </script>
 </body>
 </html> 

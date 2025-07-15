@@ -474,10 +474,12 @@ async def listar_propiedades(
         for tp in tipo_propiedad:
             tp_low = tp.lower()
             # ✅ Aceptar variantes singulares/plurales y compuestas para locales y oficinas
-            if "local" in tp_low or "oficina" in tp_low:
-                # Locales y oficinas se almacenan como "comercial" en BD; usar igualdad para aprovechar índices
-                tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
-                params.append("comercial")
+            if "local" in tp_low:
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append("%local%")
+            elif "oficina" in tp_low:
+                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
+                params.append("%oficina%")
             else:
                 tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
                 params.append(tp)
