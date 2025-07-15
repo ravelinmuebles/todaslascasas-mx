@@ -405,7 +405,7 @@ async def listar_propiedades(
     # FILTRO DE CIUDAD (más tolerante):
     #  - Coincidencia parcial y sin distinción de mayúsculas/acentos en los campos ciudad o direccion
     #  - Permite que el usuario envíe nombres como "Temixco" aun cuando en la BD la ciudad esté dentro de la dirección.
-    if ciudad and len(ciudad) > 0:
+    if ciudad and isinstance(ciudad, list) and len(ciudad) > 0:
         city_conditions = []
         for c in ciudad:
             nombre = c.strip()
@@ -418,7 +418,7 @@ async def listar_propiedades(
             where_conditions.append(f"({' OR '.join(city_conditions)})")
     
     # FILTROS DE TIPO DE OPERACIÓN (insensible a mayúsculas/minúsculas)
-    if tipo_operacion and len(tipo_operacion) > 0:
+    if tipo_operacion and isinstance(tipo_operacion, list) and len(tipo_operacion) > 0:
         op_conditions = []
         for op in tipo_operacion:
             op_conditions.append("LOWER(tipo_operacion) = LOWER(%s)")
@@ -426,17 +426,14 @@ async def listar_propiedades(
         where_conditions.append(f"({' OR '.join(op_conditions)})")
     
     # FILTROS DE TIPO DE PROPIEDAD (insensible a mayúsculas/minúsculas)
-    if tipo_propiedad and len(tipo_propiedad) > 0:
+    if tipo_propiedad and isinstance(tipo_propiedad, list) and len(tipo_propiedad) > 0:
         tp_conditions = []
         for tp in tipo_propiedad:
             tp_low = tp.lower()
             # ✅ Aceptar variantes singulares/plurales y compuestas para locales y oficinas
-            if "local" in tp_low:
+            if "local" in tp_low or "oficina" in tp_low:
                 tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
-                params.append("%local%")
-            elif "oficina" in tp_low:
-                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
-                params.append("%oficina%")
+                params.append("%comercial%")
             else:
                 tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
                 params.append(tp)
@@ -453,7 +450,7 @@ async def listar_propiedades(
         params.append(precio_max)
     
     # FILTROS DE CARACTERÍSTICAS - Múltiples valores
-    if recamaras and len(recamaras) > 0:
+    if recamaras and isinstance(recamaras, list) and len(recamaras) > 0:
         # Manejar "5+" como >= 5
         recamaras_conditions = []
         for rec in recamaras:
@@ -466,7 +463,7 @@ async def listar_propiedades(
         if recamaras_conditions:
             where_conditions.append(f"({' OR '.join(recamaras_conditions)})")
     
-    if banos and len(banos) > 0:
+    if banos and isinstance(banos, list) and len(banos) > 0:
         # Manejar "4+" como >= 4
         banos_conditions = []
         for ban in banos:
@@ -479,7 +476,7 @@ async def listar_propiedades(
         if banos_conditions:
             where_conditions.append(f"({' OR '.join(banos_conditions)})")
     
-    if estacionamientos and len(estacionamientos) > 0:
+    if estacionamientos and isinstance(estacionamientos, list) and len(estacionamientos) > 0:
         # Manejar "3+" como >= 3
         est_conditions = []
         for est in estacionamientos:
@@ -493,7 +490,7 @@ async def listar_propiedades(
             where_conditions.append(f"({' OR '.join(est_conditions)})")
 
     # FILTRO DE NIVELES
-    if niveles and len(niveles) > 0:
+    if niveles and isinstance(niveles, list) and len(niveles) > 0:
         niv_conditions = []
         for niv in niveles:
             if niv >= 3:
@@ -528,7 +525,7 @@ async def listar_propiedades(
         params.append(superficie_max)
     
     # FILTROS DE AMENIDADES
-    if amenidad and len(amenidad) > 0:
+    if amenidad and isinstance(amenidad, list) and len(amenidad) > 0:
         amenidad_conditions = []
         for am in amenidad:
             if am == 'alberca':
@@ -549,7 +546,7 @@ async def listar_propiedades(
             where_conditions.append(f"({' OR '.join(amenidad_conditions)})")
     
     # FILTROS DE DOCUMENTACIÓN
-    if documentacion and len(documentacion) > 0:
+    if documentacion and isinstance(documentacion, list) and len(documentacion) > 0:
         doc_conditions = []
         for doc in documentacion:
             if doc in ['escrituras', 'Escrituras']:
@@ -560,7 +557,7 @@ async def listar_propiedades(
             where_conditions.append(f"({' OR '.join(doc_conditions)})")
     
     # FILTROS DE CARACTERÍSTICAS ADICIONALES
-    if caracteristicas_adicionales and len(caracteristicas_adicionales) > 0:
+    if caracteristicas_adicionales and isinstance(caracteristicas_adicionales, list) and len(caracteristicas_adicionales) > 0:
         caracteristicas_adicionales_conditions = []
         for ca in caracteristicas_adicionales:
             if ca == 'Casa de un nivel':
@@ -1360,10 +1357,107 @@ async def eliminar_usuario(usuario_id: int, current_user: Usuario = Depends(get_
 
 # Endpoint adicional para compatibilidad con frontend actual
 @app.get("/api/propiedades")
-async def api_propiedades_compatibilidad():
-    """Endpoint de compatibilidad con frontend actual"""
-    # Redirigir a endpoint principal con parámetros por defecto
-    return await listar_propiedades(pagina=1, por_pagina=12)
+async def api_propiedades_compatibilidad(
+    por_pagina: int = Query(12, description="Número de propiedades por página"),
+    pagina: int = Query(1, description="Número de página"),
+    tipo_operacion: Optional[str] = Query(None, description="Filtrar por tipo de operación"),
+    precio_min: Optional[float] = Query(None, description="Precio mínimo"),
+    precio_max: Optional[float] = Query(None, description="Precio máximo"),
+    ciudad: Optional[str] = Query(None, description="Filtrar por ciudad")
+):
+    """Endpoint de compatibilidad con frontend actual - versión robusta"""
+    try:
+        # Conexión directa a la base de datos usando get_db_connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Construir consulta base
+        where_conditions = []
+        params = []
+        
+        # Filtro por tipo de operación con mapeo comercial
+        if tipo_operacion:
+            if tipo_operacion.lower() in ['local', 'oficina']:
+                # Mapear local y oficina a comercial
+                where_conditions.append("LOWER(tipo_operacion) = %s")
+                params.append('comercial')
+            else:
+                where_conditions.append("LOWER(tipo_operacion) = %s")
+                params.append(tipo_operacion.lower())
+        
+        # Filtro por precio
+        if precio_min is not None:
+            where_conditions.append("precio >= %s")
+            params.append(precio_min)
+        
+        if precio_max is not None:
+            where_conditions.append("precio <= %s")
+            params.append(precio_max)
+        
+        # Filtro por ciudad
+        if ciudad:
+            where_conditions.append("(ciudad ILIKE %s OR direccion ILIKE %s)")
+            like_ciudad = f"%{ciudad}%"
+            params.extend([like_ciudad, like_ciudad])
+        
+        # Construir WHERE clause
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+        
+        # Consulta para contar total
+        count_query = f"SELECT COUNT(*) FROM propiedades {where_clause}"
+        cur.execute(count_query, params)
+        total = cur.fetchone()[0]
+        
+        # Consulta para obtener propiedades
+        offset = (pagina - 1) * por_pagina
+        data_query = f"""
+            SELECT id, titulo, precio, tipo_operacion, tipo_propiedad, 
+                   ciudad, descripcion, created_at
+            FROM propiedades 
+            {where_clause}
+            ORDER BY created_at DESC 
+            LIMIT %s OFFSET %s
+        """
+        
+        cur.execute(data_query, params + [por_pagina, offset])
+        rows = cur.fetchall()
+        
+        propiedades = []
+        for row in rows:
+            propiedades.append({
+                "id": row[0],
+                "titulo": row[1] or "",
+                "precio": float(row[2]) if row[2] else 0,
+                "tipo_operacion": row[3] or "",
+                "tipo_propiedad": row[4] or "",
+                "ciudad": row[5] or "",
+                "descripcion": row[6] or "",
+                "imagen_url": "",  # Campo no existe en la BD
+                "created_at": row[7].isoformat() if row[7] else ""
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return {
+            "propiedades": propiedades,
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": (total + por_pagina - 1) // por_pagina,
+            "filtros_aplicados": {
+                "tipo_operacion": tipo_operacion,
+                "precio_min": precio_min,
+                "precio_max": precio_max,
+                "ciudad": ciudad
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en api_propiedades_compatibilidad: {str(e)}")
+        return {"error": str(e), "message": "Error al obtener propiedades", "success": False}
 
 # 🔥 ENDPOINTS PARA LEADS - PABLO REQUISITO CRÍTICO
 
