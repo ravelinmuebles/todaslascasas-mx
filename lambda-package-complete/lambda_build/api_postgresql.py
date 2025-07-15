@@ -340,7 +340,9 @@ async def root():
 @app.get("/propiedades", response_model=RespuestaPaginada)
 async def listar_propiedades(
     pagina: int = Query(1, ge=1, description="Número de página"),
-    por_pagina: int = Query(12, ge=1, le=500, description="Propiedades por página"),
+    # Permitir lotes grandes (scraping front-end necesita dataset completo)
+    # Incrementamos el límite de 500 → 12000 para cubrir el inventario completo y algo de margen.
+    por_pagina: int = Query(12, ge=1, le=12000, description="Propiedades por página"),
     limit_legacy: Optional[int] = Query(None, alias="limit"),
     page_legacy: Optional[int] = Query(None, alias="page"),
     search_legacy: Optional[str] = Query(None, alias="search"),
@@ -373,8 +375,9 @@ async def listar_propiedades(
     """
     
     # Mapear legacy
+    # Compatibilidad con parámetro legacy "limit" — mantiene el mismo tope que por_pagina (12 000)
     if limit_legacy and not por_pagina:
-        por_pagina = limit_legacy if limit_legacy<=500 else 500
+        por_pagina = limit_legacy if limit_legacy<=12000 else 12000
     if page_legacy and pagina==1:
         pagina = page_legacy
     if search_legacy and not q:
