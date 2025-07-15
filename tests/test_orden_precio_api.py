@@ -8,7 +8,9 @@ def _get_precios(orden: str):
     r = requests.get(f"{BASE_URL}/propiedades", params={"orden": orden, "por_pagina": 20, "pagina": 1}, timeout=30)
     r.raise_for_status()
     data = r.json()
-    return [p.get("precio_numerico") or p.get("precio") for p in data["propiedades"]]
+    precios = [p.get("precio_numerico") if p.get("precio_numerico") is not None else p.get("precio") for p in data["propiedades"]]
+    # Filtrar None para evitar fallos en ordenamiento
+    return [pr for pr in precios if pr is not None]
 
 
 def test_precio_ascendente():
