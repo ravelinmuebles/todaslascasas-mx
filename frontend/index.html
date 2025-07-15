@@ -1357,6 +1357,11 @@
                 // Normalizar campos claves
                 const tipoOperacion = (property.tipo_operacion || property.operation_type || '').toString().toLowerCase();
                 let tipoPropiedad = (property.tipo_propiedad || property.property_type || '').toString().toLowerCase();
+                // Mapear "comercial" para que cuente como local y oficina
+                if (tipoPropiedad === 'comercial') {
+                    if (tipoFilters.includes('local')) tipoPropiedad = 'local';
+                    else if (tipoFilters.includes('oficina')) tipoPropiedad = 'oficina';
+                }
                 // Normalizar para que "local comercial" cuente como "local", etc.
                 if (tipoPropiedad.includes('local')) tipoPropiedad = 'local';
                 if (tipoPropiedad.includes('oficina')) tipoPropiedad = 'oficina';
