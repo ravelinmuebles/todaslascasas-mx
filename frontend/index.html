@@ -1335,10 +1335,7 @@
             const sortValTmp = document.getElementById('sort-select').value;
             const orderingByPriceTmp = sortValTmp && sortValTmp.startsWith('precio');
             const priceRangeActiveTmp = priceMinVal > 0 || priceMaxVal < Infinity;
-            if ((orderingByPriceTmp || priceRangeActiveTmp) && currentLimit !== 6160) {
-                currentLimit = 6160; // ampliar límite sólo una vez
-                const pagSelect = document.getElementById('pagination-select');
-                if(pagSelect) pagSelect.value = '6160';
+            if (orderingByPriceTmp || priceRangeActiveTmp) {
                 currentFilters = buildApiFilters();
                 loadProperties(1, currentLimit, currentFilters);
                 return;
