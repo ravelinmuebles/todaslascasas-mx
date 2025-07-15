@@ -1,0 +1,84 @@
+# ============================================
+# .gitignore - TodasLasCasas
+# Solo código vivo en: backend/, scraping/, frontend/, tests/
+# ============================================
+
+# Archivos de respaldo y temporales
+*.bak
+*.backup
+*.backup_*
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs y archivos de depuración
+*.log
+logs/
+debug.log
+*.debug
+
+# Bases de datos y archivos de datos
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+*.json
+*.xml
+!package.json
+!package-lock.json
+!tsconfig.json
+!.gitignore
+
+# Archivos comprimidos y binarios
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.so
+*.dylib
+*.dll
+
+# Entornos virtuales
+venv/
+env/
+.env
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Directorios de respaldo (según README)
+respaldo_legacy/
+resultados/
+archivos_historicos/
+archivos_temporales/
+
+# Directorio de dependencias Lambda
+lambda-package-complete/
+
+# Archivos de configuración sensibles
+fb_state.json
+contactos_vendedores.db
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos de sistema macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Archivos de sistema Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini 
