@@ -1846,6 +1846,7 @@
 
         // CARGAR TODAS LAS PROPIEDADES SIN LÍMITE (batch de 500)
         async function loadAllProperties() {
+            const batchId = ++currentRequestId; // marca esta operación de carga masiva
             try {
                 showLoading();
                 allProperties = [];
@@ -1860,6 +1861,12 @@
                         throw new Error(`HTTP ${resp.status}`);
                     }
                     const data = await resp.json();
+                    // Si esta carga ya no es la más reciente, abortar el bucle
+                    if (batchId !== currentRequestId) {
+                        console.warn('⚠️ Descargando todas las propiedades cancelado por nueva solicitud');
+                        hideLoading();
+                        return;
+                    }
                     if (page === 1) {
                         totalExpected = data.total || 0;
                     }
