@@ -1770,6 +1770,7 @@
             if(currentLimit === 6160){
                 sortFilteredProperties();
                 renderProperties();
+                updatePropertiesCount(filteredProperties.length);
             }else{
                 // Para otros casos bastará pedir la página actual con nuevo orden.
                 currentFilters = buildApiFilters();
