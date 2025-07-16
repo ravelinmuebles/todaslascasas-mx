@@ -22,7 +22,7 @@
     <!-- Versión v3.3.21-25 -->
     <!-- Versión v3.3.21-28 -->
     <!-- Versión v3.3.21-29 - bugfix fetch filtros precio - 15/07/2025 -->
-    <!-- Versión v3.3.21-32 - input precio texto + índice BD - 15/07/2025 -->
+    <!-- Versión v3.3.21-30 - refinamiento filtros precio backend - 15/07/2025 -->
     <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
     <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
     <style>
@@ -821,8 +821,10 @@
                     <input type="text" class="filter-input" id="price-min" placeholder="Mín" pattern="[0-9,\.]+" inputmode="numeric">
                     <input type="text" class="filter-input" id="price-max" placeholder="Máx" pattern="[0-9,\.]+" inputmode="numeric">
                     </div>
-                    </div>
-
+                    <!-- Botón para aplicar explícitamente el rango de precios -->
+                    <button id="apply-price-btn" class="btn btn-primary" style="width:100%;margin-top:6px;">Aplicar precio</button>
+                 </div>
+                    
             <!-- Tipo de Operación -->
             <div class="filter-group">
                 <label class="filter-label">Tipo de Operación</label>
@@ -1183,8 +1185,8 @@
         function initializeFilters() {
             // Agregar event listeners a los filtros
             document.getElementById('search-input').addEventListener('input', debounce(applyFilters, 300));
-            document.getElementById('price-min').addEventListener('input', debounce(applyFilters, 300));
-            document.getElementById('price-max').addEventListener('input', debounce(applyFilters, 300));
+            // Precio: se aplica solo al pulsar el botón, no en cada pulsación
+            document.getElementById('apply-price-btn').addEventListener('click', applyFilters);
             
             // Event listeners para checkboxes
             document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
@@ -1192,7 +1194,36 @@
             });
         }
 
-        // CARGAR PROPIEDADES
+        // ───────────────────────────────────────────────
+        // FETCH CON TIMEOUT + REINTENTO
+        // Graba cada intento en window._fetchLog para depuración
+        // ───────────────────────────────────────────────
+        window._fetchLog = [];
+        async function fetchWithRetry(url, options = {}, retries = 1, timeoutMs = 12000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            const inicio = performance.now();
+            try {
+                const resp = await fetch(url, { ...options, signal: controller.signal });
+                const dur = Math.round(performance.now() - inicio);
+                window._fetchLog.push({ url, status: resp.status, dur });
+                clearTimeout(id);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                return resp;
+            } catch (err) {
+                clearTimeout(id);
+                window._fetchLog.push({ url, error: err.message });
+                if (retries > 0) {
+                    const u = new URL(url);
+                    const pp = Number(u.searchParams.get('por_pagina') || 100);
+                    if (pp > 50) u.searchParams.set('por_pagina', pp > 200 ? 200 : 50);
+                    return fetchWithRetry(u.toString(), options, retries - 1, timeoutMs);
+                }
+                throw err;
+            }
+        }
+
+        // CARGAR PROPIEDADES (siempre via fetchWithRetry)
         async function loadProperties(page = 1, limit = currentLimit, filters = currentFilters) {
             try {
                 showLoading();
@@ -1202,7 +1233,7 @@
                 const qs = new URLSearchParams(paramsObj).toString();
                 const url = `${API_BASE_URL}/propiedades?${qs}`;
                 console.log('🌐 Fetch:', url);
-                const response = await fetch(url);
+                const response = await fetchWithRetry(url, {}, 1, 12000);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1251,8 +1282,10 @@
             if (search) filters.search = search;
             
             // Precio
-            const priceMin = document.getElementById('price-min').value;
-            const priceMax = document.getElementById('price-max').value;
+            const priceMinRaw = document.getElementById('price-min').value.replace(/[^0-9]/g, '');
+            const priceMaxRaw = document.getElementById('price-max').value.replace(/[^0-9]/g, '');
+            const priceMin = priceMinRaw ? parseInt(priceMinRaw, 10) : '';
+            const priceMax = priceMaxRaw ? parseInt(priceMaxRaw, 10) : '';
             if (priceMin) filters.precio_min = priceMin;
             if (priceMax) filters.precio_max = priceMax;
             
@@ -1305,299 +1338,21 @@
         // APLICAR FILTROS
         function applyFilters() {
             showLoading();
-            // Detectar filtros que requieren dataset completo
-            const advCaracteristicas = Array.from(document.querySelectorAll('#caracteristicas-container input:checked')).map(cb => cb.value);
-            const advSeguridad      = Array.from(document.querySelectorAll('#seguridad-container input:checked')).map(cb => cb.value);
-            const advNiveles        = Array.from(document.querySelectorAll('#niveles-container input:checked')).map(cb => cb.value);
-            const advRecPb         = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb => cb.value);
-            const advLegal          = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb => cb.value);
-
-            const priceMinVal = parseFloat(document.getElementById('price-min').value) || 0;
-            const priceMaxVal = parseFloat(document.getElementById('price-max').value) || Infinity;
-            // ciudadFilters ya calculado más arriba, evitar redeclarar
-            const ciudadFilters = Array.from(document.querySelectorAll('#ciudad-container input:checked')).map(cb => cb.value.toLowerCase());
-
-            // Obtener tipos seleccionados ANTES de usarlos en needsLocalTipo
-            const tipoFiltersEarly = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
-
-            // El backend ya soporta Local y Oficina, por lo que no necesitamos dataset completo.
-            const needsLocalTipo = false;
-            const needsLocal = needsLocalTipo;
-
-            // Si estamos usando paginación parcial y el usuario selecciona filtros que sólo funcionan localmente,
-            // cambiamos automáticamente el límite a 6160 (todas las propiedades) y reintentar después de la carga.
-            if (currentLimit !== 6160 && needsLocal) {
-                pendingApply = true;
-                showLoading();
-                changePaginationLimit(6160);
-                return; // applyFilters se reintentará tras carga completa
-            }
-
-            // Para los casos restantes podemos apoyarnos en la API cuando no sea necesario filtrado local complejo
-            // Si el usuario estableció un rango de precio o está ordenando por precio necesitamos el dataset completo
+            // Construimos filtros y delegamos 100% al backend
+            currentFilters = buildApiFilters();
+            // Si el usuario seleccionó "Todas las propiedades" pero aplica rango de precio u orden por precio,
+            // limitamos a 500 para evitar timeouts
             const sortValTmp = document.getElementById('sort-select').value;
             const orderingByPriceTmp = sortValTmp && sortValTmp.startsWith('precio');
-            const priceRangeActiveTmp = priceMinVal > 0 || priceMaxVal < Infinity;
-            if ((orderingByPriceTmp || priceRangeActiveTmp) && currentLimit !== 6160) {
-                currentLimit = 6160; // ampliar límite sólo una vez
-                const pagSelect = document.getElementById('pagination-select');
-                if(pagSelect) pagSelect.value = '6160';
-                currentFilters = buildApiFilters();
-                loadProperties(1, currentLimit, currentFilters);
-                return;
+            const priceMinVal = parseInt(document.getElementById('price-min').value.replace(/[^0-9]/g, '')) || 0;
+            const priceMaxVal = parseInt(document.getElementById('price-max').value.replace(/[^0-9]/g, '')) || 0;
+            const priceRangeActive = priceMinVal>0 || priceMaxVal>0;
+            if(orderingByPriceTmp || priceRangeActive){
+                currentLimit = (currentLimit===6160)?500:currentLimit;
             }
-
-            if (currentLimit !== 6160) {
-                currentFilters = buildApiFilters();
-                loadProperties(1, currentLimit, currentFilters);
-                return;
-            }
-            
-            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
-            const priceMin = parseFloat(document.getElementById('price-min').value) || 0;
-            const priceMax = parseFloat(document.getElementById('price-max').value) || Infinity;
-            
-            // Bandera para saber si hay algún filtro activo
-            const anyFilterActive = !!searchTerm || priceMin > 0 || priceMax < Infinity;
-            
-            // Obtener filtros de checkboxes
-            const operacionFilters = Array.from(document.querySelectorAll('#operacion-container input:checked')).map(cb => cb.value.toLowerCase());
-            const tipoFilters = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
-            const ciudadFiltersSelected = ciudadFilters; // alias, ya definido previamente
-            const recamarasFilters = Array.from(document.querySelectorAll('#recamaras-container input:checked')).map(cb => cb.value);
-            const caracteristicasFilters = Array.from(document.querySelectorAll('#caracteristicas-container input:checked')).map(cb => cb.value);
-            const seguridadFilters = Array.from(document.querySelectorAll('#seguridad-container input:checked')).map(cb => cb.value);
-            const nivelesFilters = Array.from(document.querySelectorAll('#niveles-container input:checked')).map(cb => cb.value);
-            const recamaraPbFilters = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb => cb.value);
-            const legalFilters = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb => cb.value);
-            
-            filteredProperties = allProperties.filter(property => {
-                // Normalizar campos claves
-                const tipoOperacion = (property.tipo_operacion || property.operation_type || '').toString().toLowerCase();
-                let tipoPropiedad = (property.tipo_propiedad || property.property_type || '').toString().toLowerCase();
-                // Mapear "comercial" para que cuente como local y oficina
-                if (tipoPropiedad === 'comercial') {
-                    if (tipoFilters.includes('local')) tipoPropiedad = 'local';
-                    else if (tipoFilters.includes('oficina')) tipoPropiedad = 'oficina';
-                }
-                // Normalizar para que "local comercial" cuente como "local", etc.
-                if (tipoPropiedad.includes('local')) tipoPropiedad = 'local';
-                if (tipoPropiedad.includes('oficina')) tipoPropiedad = 'oficina';
-                if (tipoPropiedad.includes('bodega')) tipoPropiedad = 'bodega';
-                const tipoPropNorm = tipoPropiedad;
-                const ciudadProp   = (property.ciudad || property.city || '').toString().toLowerCase();
-                const nivelesPropRaw  = property.niveles || property.levels || 0;
-                const nivelesProp = Number(nivelesPropRaw) || 0;
-                const recamarasVal = property.recamaras || property.bedrooms || 0;
-                const banosVal     = property.banos || property.bathrooms || 0;
-                const estacionaVal = property.estacionamientos || property.parking || 0;
-
-                // Strings compuestos para búsqueda y filtros de texto
-                const amenidadesStr = typeof property.amenidades === 'string' ? property.amenidades : JSON.stringify(property.amenidades||'');
-                const legalStr      = typeof property.legal === 'string' ? property.legal : JSON.stringify(property.legal||'');
-
-                // Búsqueda global en múltiples campos
-                if (searchTerm) {
-                    const searchableContent = [
-                        property.id?.toString() || '',
-                        property.titulo || '',
-                        property.descripcion || '',
-                        ciudadProp,
-                        property.estado || '',
-                        property.colonia || '',
-                        property.direccion_completa || '',
-                        (property.precio || '').toString(),
-                        (property.precio_numerico || '').toString(),
-                        recamarasVal.toString(),
-                        banosVal.toString(),
-                        estacionaVal.toString(),
-                        amenidadesStr,
-                        legalStr
-                    ].join(' ').toLowerCase();
-                    
-                    if (!searchableContent.includes(searchTerm)) {
-                        return false;
-                    }
-                }
-                
-                // Filtro de precio
-                const propertyPrice = property.precio_numerico || property.price_numeric || 0;
-                if (propertyPrice < priceMin || propertyPrice > priceMax) {
-                    return false;
-                }
-                
-                // Filtros de checkboxes
-                if (operacionFilters.length > 0 && !operacionFilters.includes(tipoOperacion)) {
-                    return false;
-                }
-                
-                if (tipoFilters.length > 0 && !tipoFilters.includes(tipoPropNorm)) {
-                    return false;
-                }
-                
-                if (ciudadFiltersSelected.length > 0) {
-                    const cityDb   = (property.ciudad || property.city || '').toLowerCase();
-                    const cityStrs = (property.direccion_completa || property.location || '').toLowerCase() + ' ' + (property.descripcion || property.description || '').toLowerCase();
-                    const matchesCity = ciudadFiltersSelected.some(c => cityDb.includes(c) || cityStrs.includes(c));
-                    if (!matchesCity) {
-                        return false;
-                    }
-                }
-                
-                if (recamarasFilters.length > 0) {
-                    const recamaras = recamarasVal;
-                    const matchesRecamaras = recamarasFilters.some(filter => {
-                        if (filter === '4+') return recamaras >= 4;
-                        return recamaras === parseInt(filter);
-                    });
-                    if (!matchesRecamaras) {
-                        return false;
-                    }
-                }
-                
-                // Filtro de características (acepta amenidades como array)
-                if (caracteristicasFilters.length > 0) {
-                    const desc = (property.descripcion || property.description || '').toLowerCase();
-                    const caracTexto = (property.caracteristicas || property.features || '').toString().toLowerCase();
-
-                    let amenidadesFlat = '';
-                    const amenidadesArr = property.amenidades || property.amenities || [];
-                    if (Array.isArray(amenidadesArr)) {
-                        amenidadesFlat = amenidadesArr.join(' ').toLowerCase();
-                    } else {
-                        amenidadesFlat = (amenidadesArr || '').toString().toLowerCase();
-                    }
-
-                    const matchesCarac = caracteristicasFilters.every(filter => {
-                        const palabras = CARAC_SYNONYMS[filter] || [filter];
-                        return palabras.some(w => desc.includes(w) || amenidadesFlat.includes(w) || caracTexto.includes(w));
-                    });
-
-                    if (!matchesCarac) return false;
-                }
-
-                // Filtro de seguridad con fallback textual
-                if (seguridadFilters.length > 0) {
-                    const tieneBool = ['caseta_vigilancia','camaras_seguridad','vigilancia_24h','acceso_controlado']
-                        .some(k => typeof property[k] !== 'undefined');
-
-                    const matchesSeguridad = seguridadFilters.some(filter => {
-                        switch(filter) {
-                            case 'caseta': {
-                                const v = property.caseta_vigilancia;
-                                return v === true || v === 1 || v === '1' || v === 'true';
-                            }
-                            case 'camaras': {
-                                const v = property.camaras_seguridad;
-                                return v === true || v === 1 || v === '1' || v === 'true';
-                            }
-                            case '24h': {
-                                const v = property.vigilancia_24h;
-                                return v === true || v === 1 || v === '1' || v === 'true';
-                            }
-                            case 'acceso_controlado': {
-                                const v = property.acceso_controlado;
-                                return v === true || v === 1 || v === '1' || v === 'true';
-                            }
-                            default:
-                                return false;
-                        }
-                    });
-
-                    if (!matchesSeguridad) {
-                        // Fallback búsqueda textual SIEMPRE (independiente de campos booleanos)
-                        const textoSeg = (property.descripcion || '').toLowerCase();
-                        const fallbackOk = seguridadFilters.every(f => {
-                            const palabras = SEGURIDAD_SYNONYMS[f] || [f];
-                            return palabras.some(w => textoSeg.includes(w));
-                        });
-                        if (!fallbackOk) return false;
-                    }
-                }
-            
-                // Filtro de niveles
-                if (nivelesFilters.length > 0) {
-                    const niveles = nivelesProp;
-                    
-                    const matchesNiveles = nivelesFilters.some(filter => {
-                        switch(filter) {
-                            case 'un_nivel': return niveles === 1 && ((property.tipo_propiedad || property.property_type || '').toLowerCase() !== 'departamento' && (property.tipo_propiedad || property.property_type || '').toLowerCase() !== 'apartment');
-                            case 'dos_niveles': return niveles === 2;
-                            case 'tres_niveles': return niveles >= 3;
-                            default: return false;
-                        }
-                    });
-                    
-                    if (!matchesNiveles) {
-                        return false;
-                    }
-                }
-                
-                // Filtro de recámara en planta baja
-                if (recamaraPbFilters.length > 0) {
-                    const recPbRaw = property.recamara_planta_baja ?? property.recamara_pb ?? property.bedroom_groundfloor;
-                    let recPbBool;
-                    if (recPbRaw === true || recPbRaw === "true" || recPbRaw === 1 || recPbRaw === "1" || recPbRaw === "si") {
-                        recPbBool = true;
-                    } else if (recPbRaw === false || recPbRaw === "false" || recPbRaw === 0 || recPbRaw === "0" || recPbRaw === "no") {
-                        recPbBool = false;
-                    } else {
-                        // Fallback: búsqueda textual inteligente
-                        const descLow = (property.descripcion || '').toLowerCase();
-
-                        // Patrones:
-                        //  1) "recámara (en)? planta baja|pb"  (recámara en planta baja)
-                        //  2) "planta baja ... recámara" o "pb ... recámara"
-                        const regexPositivo = /(rec[aá]?mara|habitaci[oó]n|hab)\s*(en)?\s*(pb|planta baja)|\b(pb|planta baja)\b.{0,40}?(rec[aá]?mara|habitaci[oó]n|hab)/i;
-                        const regexNegativo = /(sin|no|ninguna|ning[úu]n|ningun).{0,20}?(rec[aá]?mara|habitaci[oó]n|hab)/i;
-
-                        if (regexPositivo.test(descLow) && !regexNegativo.test(descLow)) {
-                            recPbBool = true;
-                        } else if (regexNegativo.test(descLow)) {
-                            recPbBool = false;
-                        }
-                    }
-                    const matchesRecPb = recamaraPbFilters.some(f => {
-                        if (f === 'si') return recPbBool === true;
-                        if (f === 'no') return recPbBool === false;
-                        return false;
-                    });
-                    if (!matchesRecPb) return false;
-                }
-                
-                // Filtro legal
-                if (legalFilters.length > 0) {
-                    const descripcion = (property.descripcion || '').toLowerCase();
-                    const legal = legalStr.toLowerCase();
-                    
-                    const matchesLegal = legalFilters.some(filter => {
-                        switch(filter) {
-                            case 'escrituras': return legal.includes('escritura') || descripcion.includes('escritura');
-                            case 'cesion': return legal.includes('cesión') || descripcion.includes('cesión') || descripcion.includes('cesion');
-                            case 'credito': return descripcion.includes('crédito') || descripcion.includes('credito') || descripcion.includes('infonavit');
-                            default: return false;
-                        }
-                    });
-                    
-                    if (!matchesLegal) {
-                        return false;
-                    }
-                }
-                
-                return true;
-            });
-            
-            // Si no hay filtros activos y sin término de búsqueda, restaurar listado completo
-            if (!anyFilterActive && operacionFilters.length===0 && tipoFilters.length===0 && ciudadFiltersSelected.length===0 && recamarasFilters.length===0 && caracteristicasFilters.length===0 && seguridadFilters.length===0 && nivelesFilters.length===0 && recamaraPbFilters.length===0 && legalFilters.length===0){
-                filteredProperties = allProperties;
-            }
-
-            // Aplicar ordenamiento seleccionado
-            sortFilteredProperties();
-            
-            renderProperties();
-            updatePropertiesCount(filteredProperties.length);
-            hideLoading();
+            allProperties=[];
+            filteredProperties=[];
+            loadProperties(1,currentLimit,currentFilters);
         }
 
         // OBTENER VALORES MARCADOS
