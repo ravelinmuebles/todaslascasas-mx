@@ -25,7 +25,7 @@
     <!-- Versión v3.3.21-30 - refinamiento filtros precio backend - 15/07/2025 -->
     <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
     <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
-    <!-- Versión v3.3.21-35 - botón aplicar precio + fix filtros local/oficina - 16/07/2025 -->
+    <!-- Versión v3.3.21-36 - enter aplica rango de precio y contador correcto - 16/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -766,7 +766,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-35</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-36</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1188,6 +1188,14 @@
             document.getElementById('search-input').addEventListener('input', debounce(applyFilters, 300));
             // Precio: se aplica solo al pulsar el botón, no en cada pulsación
             document.getElementById('apply-price-btn').addEventListener('click', applyFilters);
+            // También aplicar al presionar Enter dentro de los campos de precio
+            ['price-min','price-max'].forEach(id=>{
+                document.getElementById(id).addEventListener('keyup', e=>{
+                    if(e.key==='Enter'){
+                        applyFilters();
+                    }
+                });
+            });
             
             // Event listeners para checkboxes
             document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
