@@ -68,7 +68,10 @@ PATRONES_TERRENO = [
 
 # PATRONES COMERCIAL
 PATRONES_LOCAL = [
-    r'\b(local|comercial|negocio|tienda|shop)\b',
+    # Singular, plural y frase más común
+    r'\b(local|locales)\b',
+    r'\blocal\s+comercial(es)?\b',
+    r'\b(comercial|negocio|tienda|shop)\b',
     r'\b(restaurante|café|cafe|bar)\b',
     r'\b(consultorio|clínica|clinica|hospital)\b'
 ]
