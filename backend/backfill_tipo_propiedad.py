@@ -62,7 +62,7 @@ def main():
             """
             SELECT id, titulo, descripcion, tipo_propiedad
             FROM propiedades
-            WHERE COALESCE(tipo_propiedad, '') IN ('', 'comercial', 'otro')
+            WHERE LOWER(COALESCE(tipo_propiedad, '')) IN ('', 'comercial', 'otro')
             LIMIT %s
             """,
             (BATCH_SIZE,)
