@@ -158,29 +158,30 @@ def detectar_tipo_por_descripcion(descripcion: str) -> Optional[str]:
         if re.search(patron, desc_lower):
             puntos_bodega += 1
     
-    # LÓGICA DE DECISIÓN
-    
-    total_puntos_casa = puntos_casa + puntos_casa_explicitos
-    
-    # Si hay indicios de CASA (recámaras, niveles, etc.), es CASA
-    if total_puntos_casa >= 1:
-        logger.info(f"Detectado como CASA ({total_puntos_casa} indicios: {puntos_casa} normales + {puntos_casa_explicitos} explícitos)")
-        return "casa"
-    
-    # Si hay indicios de DEPARTAMENTO
-    if puntos_departamento >= 1:
-        logger.info(f"Detectado como DEPARTAMENTO ({puntos_departamento} indicios)")
-        return "departamento"
-    
-    # Comerciales (prioridad: oficina > bodega > local)
+    # ─── DECISIÓN CON PRIORIDAD COMERCIAL ─────────────────────────────
+    # 1) Categorías comerciales antes que residencial genérico
     if puntos_oficina >= 1:
+        logger.info("Detectado como OFICINA (prioridad comercial)")
         return "oficina"
 
     if puntos_bodega >= 1:
+        logger.info("Detectado como BODEGA (prioridad comercial)")
         return "bodega"
 
     if puntos_local >= 1:
+        logger.info("Detectado como LOCAL (prioridad comercial)")
         return "local"
+
+    total_puntos_casa = puntos_casa + puntos_casa_explicitos
+
+    # 2) Residencial – Casa vs Departamento
+    if total_puntos_casa >= 1:
+        logger.info(f"Detectado como CASA ({total_puntos_casa} indicios: {puntos_casa} normales + {puntos_casa_explicitos} explícitos)")
+        return "casa"
+
+    if puntos_departamento >= 1:
+        logger.info(f"Detectado como DEPARTAMENTO ({puntos_departamento} indicios)")
+        return "departamento"
     
     # Solo es TERRENO si NO hay indicios de construcción Y tiene patrones de terreno
     if puntos_terreno >= 1 and total_puntos_casa == 0 and puntos_departamento == 0:
