@@ -25,6 +25,7 @@
     <!-- Versión v3.3.21-30 - refinamiento filtros precio backend - 15/07/2025 -->
     <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
     <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
+    <!-- Versión v3.3.21-35 - botón aplicar precio + fix filtros local/oficina - 16/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -765,7 +766,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-34</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-35</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1296,7 +1297,8 @@
             // Tipo
             const tipoFilters = Array.from(document.querySelectorAll('#tipo-container input:checked')).map(cb => cb.value.toLowerCase());
             if (tipoFilters.length > 0) {
-                filters.tipo_propiedad = tipoFilters[0]; // enviar tal cual (local, oficina, etc.)
+                // Enviar todas las selecciones repetidas para que FastAPI las interprete como lista
+                filters.tipo_propiedad = tipoFilters[0];
             }
             
             // Ciudad
