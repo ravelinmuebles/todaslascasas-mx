@@ -26,7 +26,7 @@
     <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
     <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
     <!-- Versión v3.3.21-37 - fix condición de carrera en contador resultados - 16/07/2025 -->
-    <!-- Versión v3.3.22 - filtros Niveles + estable - 16/07/2025 -->
+    <!-- Versión v3.3.23 - fix niveles array param - 16/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -767,7 +767,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.22</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.23</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1361,7 +1361,7 @@
                 };
                 const nivelesNums = nivelesFilters.map(mapNivel).filter(n=>n!==null);
                 if(nivelesNums.length>0){
-                    filters.niveles = nivelesNums.join(',');
+                    filters.niveles = nivelesNums; // dejar como array para URLSearchParams -> niveles=1&niveles=3
                 }
             }
 
