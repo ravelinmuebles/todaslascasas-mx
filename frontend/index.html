@@ -1023,9 +1023,7 @@
         <!-- ÁREA DE PROPIEDADES -->
         <main class="properties-area">
             <div class="properties-header">
-                <div class="properties-count" id="properties-count">
-                    Cargando propiedades...
-                            </div>
+                <div class="properties-count" id="properties-count"></div>
                 <div class="sort-controls">
                     <select class="sort-select" id="sort-select" onchange="sortProperties()">
                         <option value="">Sin ordenar</option>
@@ -1809,12 +1807,27 @@
 
         // ACTUALIZAR CONTADOR
         function updatePropertiesCount(total) {
-            document.getElementById('properties-count').textContent = `${total} propiedades encontradas`;
+            let el = document.getElementById('properties-count');
+            if(!el){
+                const header = document.querySelector('.properties-header');
+                el = document.createElement('div');
+                el.id='properties-count';
+                el.className='properties-count';
+                header.prepend(el);
+            }
+            el.innerHTML = `<strong>${total}</strong> propiedades encontradas`;
+        }
+
+        // Reiniciar contador durante carga
+        function resetPropertiesCount(){
+            const el = document.getElementById('properties-count');
+            if(el){el.textContent='Buscando…';}
         }
 
         // MOSTRAR LOADING
         function showLoading() {
             document.getElementById('loading-overlay').style.display = 'flex';
+            resetPropertiesCount();
         }
 
         function hideLoading() {
