@@ -1233,7 +1233,10 @@
         }
 
         // CARGAR PROPIEDADES (siempre via fetchWithRetry)
+        let currentRequestId = 0; // identificador incremental para descartar respuestas obsoletas
+
         async function loadProperties(page = 1, limit = currentLimit, filters = currentFilters) {
+            const requestId = ++currentRequestId;
             try {
                 showLoading();
                 
@@ -1248,7 +1251,13 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                        const data = await response.json();
+                const data = await response.json();
+                // Si esta respuesta no corresponde a la solicitud más reciente, ignorar
+                if (requestId !== currentRequestId) {
+                    console.warn('⚠️ Respuesta descartada por estar desfasada');
+                    hideLoading();
+                    return;
+                }
                 console.log('📊 Datos API recibidos:', data);
                 
                 const propsPage = (data.propiedades || []).map(normalizeProperty);
