@@ -345,7 +345,7 @@ async def root():
 @app.get("/propiedades", response_model=RespuestaPaginada)
 async def listar_propiedades(
     pagina: int = Query(1, ge=1, description="Número de página"),
-    por_pagina: int = Query(12, ge=1, le=500, description="Propiedades por página"),
+    por_pagina: int = Query(12, ge=1, le=12000, description="Propiedades por página"),
     # Parámetros legacy (compatibilidad con front-end <= v3.3.3)
     limit_legacy: Optional[int] = Query(None, alias="limit"),
     page_legacy: Optional[int] = Query(None, alias="page"),
@@ -385,7 +385,7 @@ async def listar_propiedades(
     
     # Mapear parámetros legacy si los actuales no vienen informados
     if limit_legacy and not por_pagina:
-        por_pagina = limit_legacy if limit_legacy<=500 else 500
+        por_pagina = limit_legacy if limit_legacy<=12000 else 12000
     if page_legacy and pagina==1:
         pagina = page_legacy
     if search_legacy and not q:
@@ -475,11 +475,14 @@ async def listar_propiedades(
             tp_low = tp.lower()
             # ✅ Aceptar variantes singulares/plurales y compuestas para locales y oficinas
             if "local" in tp_low:
-                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
-                params.append("%local%")
+                # Coincidir si la columna contiene "local" O el texto menciona "local" (mas tolerante)
+                tp_conditions.append("(LOWER(tipo_propiedad) LIKE %s OR LOWER(titulo) LIKE %s OR LOWER(descripcion) LIKE %s)")
+                like="%local%"
+                params.extend([like, like, like])
             elif "oficina" in tp_low:
-                tp_conditions.append("LOWER(tipo_propiedad) LIKE %s")
-                params.append("%oficina%")
+                tp_conditions.append("(LOWER(tipo_propiedad) LIKE %s OR LOWER(titulo) LIKE %s OR LOWER(descripcion) LIKE %s)")
+                like="%oficina%"
+                params.extend([like, like, like])
             else:
                 tp_conditions.append("LOWER(tipo_propiedad) = LOWER(%s)")
                 params.append(tp)

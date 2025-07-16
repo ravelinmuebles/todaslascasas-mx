@@ -19,3 +19,12 @@ deploy-stg: build
 deploy-prod:
 	@echo "🚀 Desplegando a prod (alias live)…"
 	aws lambda update-alias --function-name $(LAMBDA_NAME) --name live --function-version `aws lambda list-versions-by-function --function-name $(LAMBDA_NAME) --max-items 1 --query 'Versions[0].Version' --output text` 
+
+deploy-complete:
+	@echo "🚀 Despliegue completo con verificación..."
+	./deploy_complete.sh 
+
+# --- BACKFILL TIPO PROPIEDAD ---
+backfill-tipo-prop:
+	@echo "🔄 Ejecutando backfill de tipo_propiedad…"
+	python backfill_tipo_propiedad.py 
