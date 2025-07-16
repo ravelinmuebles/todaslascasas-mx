@@ -26,6 +26,7 @@
     <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
     <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
     <!-- Versión v3.3.21-37 - fix condición de carrera en contador resultados - 16/07/2025 -->
+    <!-- Versión v3.3.22 - filtros Niveles + estable - 16/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -766,7 +767,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-37</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.22</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1347,6 +1348,21 @@
                 const amenMap = { piscina:'alberca', jardin:'jardin', cochera:'cochera', terraza:'terraza' };
                 const backendAmen = caracteristicasFiltersAPI.map(c => amenMap[c] || c);
                 filters.amenidad = backendAmen.join(',');
+            }
+
+            // Niveles
+            const nivelesFilters = Array.from(document.querySelectorAll('#niveles-container input:checked')).map(cb => cb.value);
+            if(nivelesFilters.length>0){
+                const mapNivel = v=>{
+                    if(v==='un_nivel') return 1;
+                    if(v==='dos_niveles') return 2;
+                    if(v==='tres_niveles') return 3;
+                    return null;
+                };
+                const nivelesNums = nivelesFilters.map(mapNivel).filter(n=>n!==null);
+                if(nivelesNums.length>0){
+                    filters.niveles = nivelesNums.join(',');
+                }
             }
 
             return filters;
