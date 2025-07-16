@@ -24,6 +24,7 @@
     <!-- Versión v3.3.21-29 - bugfix fetch filtros precio - 15/07/2025 -->
     <!-- Versión v3.3.21-30 - refinamiento filtros precio backend - 15/07/2025 -->
     <!-- Versión v3.3.21-33 - fix reset dataset + currentLimit - 15/07/2025 -->
+    <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -764,7 +765,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-33</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.21-34</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1191,7 +1192,36 @@
             });
         }
 
-        // CARGAR PROPIEDADES
+        // ───────────────────────────────────────────────
+        // FETCH CON TIMEOUT + REINTENTO
+        // Graba cada intento en window._fetchLog para depuración
+        // ───────────────────────────────────────────────
+        window._fetchLog = [];
+        async function fetchWithRetry(url, options = {}, retries = 1, timeoutMs = 12000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            const inicio = performance.now();
+            try {
+                const resp = await fetch(url, { ...options, signal: controller.signal });
+                const dur = Math.round(performance.now() - inicio);
+                window._fetchLog.push({ url, status: resp.status, dur });
+                clearTimeout(id);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                return resp;
+            } catch (err) {
+                clearTimeout(id);
+                window._fetchLog.push({ url, error: err.message });
+                if (retries > 0) {
+                    const u = new URL(url);
+                    const pp = Number(u.searchParams.get('por_pagina') || 100);
+                    if (pp > 50) u.searchParams.set('por_pagina', pp > 200 ? 200 : 50);
+                    return fetchWithRetry(u.toString(), options, retries - 1, timeoutMs);
+                }
+                throw err;
+            }
+        }
+
+        // CARGAR PROPIEDADES (siempre via fetchWithRetry)
         async function loadProperties(page = 1, limit = currentLimit, filters = currentFilters) {
             try {
                 showLoading();
@@ -1201,7 +1231,7 @@
                 const qs = new URLSearchParams(paramsObj).toString();
                 const url = `${API_BASE_URL}/propiedades?${qs}`;
                 console.log('🌐 Fetch:', url);
-                const response = await fetch(url);
+                const response = await fetchWithRetry(url, {}, 1, 12000);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
