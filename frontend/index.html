@@ -821,8 +821,10 @@
                     <input type="text" class="filter-input" id="price-min" placeholder="Mín" pattern="[0-9,\.]+" inputmode="numeric">
                     <input type="text" class="filter-input" id="price-max" placeholder="Máx" pattern="[0-9,\.]+" inputmode="numeric">
                     </div>
-                    </div>
-
+                    <!-- Botón para aplicar explícitamente el rango de precios -->
+                    <button id="apply-price-btn" class="btn btn-primary" style="width:100%;margin-top:6px;">Aplicar precio</button>
+                 </div>
+                    
             <!-- Tipo de Operación -->
             <div class="filter-group">
                 <label class="filter-label">Tipo de Operación</label>
@@ -1183,8 +1185,8 @@
         function initializeFilters() {
             // Agregar event listeners a los filtros
             document.getElementById('search-input').addEventListener('input', debounce(applyFilters, 300));
-            document.getElementById('price-min').addEventListener('input', debounce(applyFilters, 300));
-            document.getElementById('price-max').addEventListener('input', debounce(applyFilters, 300));
+            // Precio: se aplica solo al pulsar el botón, no en cada pulsación
+            document.getElementById('apply-price-btn').addEventListener('click', applyFilters);
             
             // Event listeners para checkboxes
             document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
