@@ -48,17 +48,17 @@ def actualizar_precios():
     print("\nActualizando precios...")
     for pid, datos in tqdm(repo_master.items(), desc="Procesando propiedades"):
         try:
-            # Obtener la fecha de extracción
-            fecha_str = datos.get("fecha_extraccion", "").split("T")[0]
-            if not fecha_str:
-                print(f"Advertencia: Propiedad {pid} no tiene fecha de extracción")
-                continue
-                
-            # Construir ruta al archivo HTML
-            ciudad = datos.get("ciudad", "cuernavaca").lower()
-            ruta_html = os.path.join(CARPETA_RESULTADOS, fecha_str, f"{ciudad}-{fecha_str}-{pid}.html")
+            # Buscar archivo HTML recursivamente
+            ruta_html = None
+            for root, _, files in os.walk(CARPETA_RESULTADOS):
+                for file in files:
+                    if file.endswith(f"-{pid}.html"):
+                        ruta_html = os.path.join(root, file)
+                        break
+                if ruta_html:
+                    break
             
-            if not os.path.exists(ruta_html):
+            if not ruta_html:
                 propiedades_sin_html += 1
                 continue
                 

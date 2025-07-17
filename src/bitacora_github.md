@@ -403,3 +403,12 @@ Con esto:
 * **13 Jul 2025 – 19:40 UTC** – Front-end **v3.3.18-20**
   * Si el usuario selecciona «Local» u «Oficina», se fuerza la carga completa (6160) y filtra localmente, ya que la API no devuelve esos tipos.
   * Badge actualizado y deploy.
+
+### 2025-07-17 – v3.3.26
+
+• Fix filtros «Niveles» (sin falsos positivos) y «Recámara en PB» (excluye terrenos).
+• Nuevo script `fix_recamara_pb.py` y recálculo masivo de BD.
+• Filtro de «Documentación» (escrituras/cesión/crédito) soportado en backend y frontend.  
+• Lambda v147 desplegada (live + stg).  
+• Frontend v3.3.26 publicado en S3 (/stg/ y root en prod).  
+• README actualizado: se exige respaldo completo en cada versión estable.

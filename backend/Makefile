@@ -5,7 +5,8 @@ ZIP_NAME = lambda.zip
 
 build:
 	@echo "⏳ Empaquetando Lambda…"
-	zip -r $(ZIP_NAME) ../lambda-package-complete/lambda_function.py ../lambda-package-complete/api_postgresql.py ../lambda-package-complete/lambda_build -x "*__pycache__*" "*.pyc" > /dev/null
+	cd ../lambda-package-complete && \
+	  zip -r ../backend/$(ZIP_NAME) lambda_function.py api_postgresql.py lambda_build -x "*__pycache__*" "*.pyc" > /dev/null
 	@du -h $(ZIP_NAME)
 
 clean:

@@ -18,7 +18,6 @@ import logging
 from typing import Dict
 import pg8000
 from pg8000.exceptions import InterfaceError
-from importlib import import_module
 
 # Añadir src/ al path para importar modules.*
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -26,14 +25,6 @@ SRC_DIR = os.path.join(ROOT_DIR, 'src')
 sys.path.append(SRC_DIR)
 
 from modules.tipo_propiedad import actualizar_tipo_propiedad  # type: ignore
-
-# Wrapper para reutilizar el detector existente sin duplicar lógica
-tipo_mod = import_module('modules.tipo_propiedad')
-
-
-def detectar_nuevo_tipo(titulo: str, descripcion: str) -> str:
-    texto = f"{titulo or ''} {descripcion or ''}"
-    return tipo_mod.detectar_tipo_por_descripcion(texto) or ''
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("backfill_tipo_propiedad")
@@ -48,6 +39,8 @@ DB_CONFIG = {
 
 # Tamaño de lote y pausa reconexión
 BATCH_SIZE = 500
+
+OFFSET_FILE = 'last_offset.txt'
 
 def count_target(cur):
     cur.execute("SELECT COUNT(*) FROM propiedades WHERE LOWER(COALESCE(tipo_propiedad, '')) IN ('', 'comercial', 'otro', 'casa')")
@@ -93,7 +86,14 @@ def main():
     conn = get_conn()
     cur = conn.cursor()
     total_rows = count_target(cur)
-    offset = 0
+    try:
+        with open(OFFSET_FILE, 'r') as f:
+            offset = int(f.read().strip())
+            logger.info(f"Resumiendo desde offset guardado: {offset}")
+    except (FileNotFoundError, ValueError):
+        offset = 0
+        logger.info("Iniciando desde offset 0")
+
     total_updated = 0
     try:
         while True:
@@ -102,8 +102,8 @@ def main():
                 break
             for row in batch:
                 pid, titulo, descripcion, tipo_actual = row
-                nueva = detectar_nuevo_tipo(titulo, descripcion)
-                if nueva and nueva != tipo_actual:
+                nueva = process_row({'titulo': titulo or '', 'descripcion': descripcion or ''})
+                if nueva and nueva.lower() != (tipo_actual or '').lower():
                     cur.execute(
                         "UPDATE propiedades SET tipo_propiedad=%s WHERE id=%s",
                         (nueva, pid),
@@ -111,12 +111,17 @@ def main():
                     total_updated += 1
             conn.commit()
             offset += BATCH_SIZE
+            with open(OFFSET_FILE, 'w') as f:
+                f.write(str(offset))
             print_progress(offset if offset<total_rows else total_rows, total_rows)
-            logging.debug(f"📝 Batch offset {offset} – acumulados: {total_updated}")
-    except InterfaceError:
-        logging.error("Conexión perdida; reinicia y continúa con offset %s", offset)
+            logger.info(f"📝 Batch offset {offset} – acumulados: {total_updated}")
+    except InterfaceError as e:
+        logger.error(f"Conexión perdida durante offset {offset}: {e}; el último batch puede no haberse guardado. Reinicia para continuar.")
     finally:
         conn.close()
+        if offset >= total_rows:
+            os.remove(OFFSET_FILE)
+            logger.info("Backfill completado; archivo de offset eliminado.")
 
 
 if __name__ == "__main__":

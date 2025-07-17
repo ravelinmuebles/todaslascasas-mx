@@ -70,7 +70,7 @@ INDICADORES = {
     ],
     
     "un_nivel": [
-        "un nivel", "una planta", "planta baja"
+        "un nivel", "una planta"
     ],
     
     "recamara_planta_baja": [
@@ -399,6 +399,15 @@ def extraer_niveles(texto: str) -> Dict:
                 "evidencia": [f"Indicador de un nivel encontrado: {indicador}"]
             })
             return resultado
+
+    # Detectar presencia explícita de "planta alta" como indicativo de al menos 2 niveles
+    if "planta alta" in texto_norm or "segunda planta" in texto_norm or "segundo piso" in texto_norm:
+        resultado.update({
+            "valor": 2,
+            "confianza": 0.7,
+            "evidencia": ["Indicador de múltiples niveles: planta alta"]
+        })
+        return resultado
     
     return resultado
 

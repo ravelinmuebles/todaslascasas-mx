@@ -520,6 +520,8 @@ async def listar_propiedades(
                 doc_conditions.append("(LOWER(titulo) LIKE '%%escrituras%%' OR LOWER(descripcion) LIKE '%%escrituras%%')")
             elif doc in ['cesion', 'Cesión']:
                 doc_conditions.append("(LOWER(titulo) LIKE '%%cesión%%' OR LOWER(descripcion) LIKE '%%cesión%%' OR LOWER(titulo) LIKE '%%cesion%%' OR LOWER(descripcion) LIKE '%%cesion%%')")
+            elif doc.lower() in ['credito', 'crédito']:
+                doc_conditions.append("(LOWER(titulo) LIKE '%%credito%%' OR LOWER(descripcion) LIKE '%%credito%%' OR LOWER(titulo) LIKE '%%crédito%%' OR LOWER(descripcion) LIKE '%%crédito%%')")
         if doc_conditions:
             where_conditions.append(f"({' OR '.join(doc_conditions)})")
     
@@ -552,8 +554,12 @@ async def listar_propiedades(
             where_conditions.append(f"({' OR '.join(niv_conditions)})")
 
     # Recámara en planta baja
-    if recamara_planta_baja:
-        where_conditions.append("recamara_planta_baja = true")
+    if recamara_planta_baja is not None:
+        where_conditions.append("recamara_planta_baja = %s")
+        params.append(recamara_planta_baja)
+        # Si se requiere recámara PB, descartar terrenos (no tiene sentido)
+        if recamara_planta_baja is True:
+            where_conditions.append("LOWER(tipo_propiedad) NOT LIKE '%terreno%'")
     
     where_clause = " AND ".join(where_conditions)
     

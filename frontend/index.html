@@ -27,6 +27,8 @@
     <!-- Versión v3.3.21-34 - fetchWithRetry timeout + logging - 15/07/2025 -->
     <!-- Versión v3.3.21-37 - fix condición de carrera en contador resultados - 16/07/2025 -->
     <!-- Versión v3.3.24 - niveles fuerza tipo casa - 16/07/2025 -->
+    <!-- Versión v3.3.25 - recámara PB envía param y limpia terrenos - 17/07/2025 -->
+    <!-- Versión v3.3.26 - filtros Documentación (escrituras/cesión/crédito) - 17/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -767,7 +769,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.24</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.26</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1366,6 +1368,23 @@
                         filters.tipo_propiedad = 'casa'; // limitar a casas por negocio
                     }
                 }
+            }
+
+            // Recámara en PB
+            const recPbChecks = Array.from(document.querySelectorAll('#recamara-pb-container input:checked')).map(cb=>cb.value);
+            if(recPbChecks.length===1){
+                if(recPbChecks[0]==='si') filters.recamara_planta_baja = true;
+                if(recPbChecks[0]==='no') filters.recamara_planta_baja = false;
+                // Evitar terrenos: si no se seleccionó tipo_propiedad, asumir casa
+                if(!filters.tipo_propiedad){
+                    filters.tipo_propiedad = 'casa';
+                }
+            }
+
+            // Documentación
+            const docFilters = Array.from(document.querySelectorAll('#legal-container input:checked')).map(cb=>cb.value.toLowerCase());
+            if(docFilters.length>0){
+                filters.documentacion = docFilters; // se envía como array multiple ?documentacion=escrituras&documentacion=cesion
             }
 
             return filters;

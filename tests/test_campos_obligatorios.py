@@ -15,6 +15,9 @@ def test_propiedades_tienen_precio_y_direccion():
     with open(REPO_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    if isinstance(data, dict):
+        data = list(data.values())
+
     assert isinstance(data, list), "El repositorio debe ser una lista de propiedades"
     faltantes_precio = []
     faltantes_direccion = []
@@ -25,6 +28,8 @@ def test_propiedades_tienen_precio_y_direccion():
             precio_valor = prop["precio"].get("valor")
         elif isinstance(prop.get("precio"), (int, float)):
             precio_valor = prop["precio"]
+        elif isinstance(prop.get("precio"), str):
+            precio_valor = prop["precio"].strip()
 
         if not precio_valor:
             faltantes_precio.append(prop.get("id", "sin_id"))

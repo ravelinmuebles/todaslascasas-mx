@@ -39,7 +39,7 @@ def verificar_caso():
     print(f"- Baños: {caract['banos']}")
     print(f"- Niveles: {caract['niveles']}")
     print(f"- Es un nivel: {caract['es_un_nivel']}")
-    print(f"- Recámara en PB: {caract['recamara_pb']}")
+    print(f"- Recámara en PB: {caract.get('recamara_planta_baja', caract.get('recamara_pb', 'N/A'))}")
     print(f"- Estacionamientos: {caract['estacionamientos']}")
 
 if __name__ == "__main__":
