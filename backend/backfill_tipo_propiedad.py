@@ -17,6 +17,7 @@ import sys
 import logging
 from typing import Dict
 import pg8000
+from pg8000.exceptions import InterfaceError
 
 # Añadir src/ al path para importar modules.*
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -36,7 +37,19 @@ DB_CONFIG = {
     'port': int(os.environ.get('DB_PORT', 5432))
 }
 
+# Tamaño de lote y pausa reconexión
 BATCH_SIZE = 500
+
+def count_target(cur):
+    cur.execute("SELECT COUNT(*) FROM propiedades WHERE LOWER(COALESCE(tipo_propiedad, '')) IN ('', 'comercial', 'otro', 'casa')")
+    return cur.fetchone()[0]
+
+def print_progress(done,total):
+    pct = done*100/total if total else 100
+    bar_len = 20
+    filled = int(bar_len*pct/100)
+    bar = '█'*filled + '-'*(bar_len-filled)
+    print(f"\rProgreso: |{bar}| {pct:.1f}% ({done}/{total})", end='', flush=True)
 
 
 def get_conn():
@@ -53,40 +66,48 @@ def process_row(row: Dict) -> str:
     return resultado.get('tipo_propiedad')
 
 
+def fetch_batch(cur, offset):
+    cur.execute(
+        """
+        SELECT id, titulo, descripcion, tipo_propiedad
+        FROM propiedades
+        WHERE LOWER(COALESCE(tipo_propiedad, '')) IN ('', 'comercial', 'otro', 'casa')
+        ORDER BY id
+        LIMIT %s OFFSET %s
+        """,
+        (BATCH_SIZE, offset),
+    )
+    return cur.fetchall()
+
+
 def main():
     conn = get_conn()
-    cursor = conn.cursor()
-    total_actualizados = 0
-    while True:
-        cursor.execute(
-            """
-            SELECT id, titulo, descripcion, tipo_propiedad
-            FROM propiedades
-            WHERE LOWER(COALESCE(tipo_propiedad, '')) IN ('', 'comercial', 'otro', 'casa')
-            LIMIT %s
-            """,
-            (BATCH_SIZE,)
-        )
-        rows = cursor.fetchall()
-        if not rows:
-            break
-        columnas = [d[0] for d in cursor.description]
-        actualizados = 0
-        for raw in rows:
-            row = dict(zip(columnas, raw))
-            nuevo_tipo = process_row(row)
-            if nuevo_tipo and nuevo_tipo not in ('', 'comercial', 'otro'):
-                cursor.execute(
-                    "UPDATE propiedades SET tipo_propiedad=%s WHERE id=%s",
-                    (nuevo_tipo, row['id'])
-                )
-                actualizados += 1
-        conn.commit()
-        total_actualizados += actualizados
-        logger.info(f"📝 Batch procesado: {actualizados} registros actualizados")
-        if len(rows) < BATCH_SIZE:
-            break
-    logger.info(f"✅ Backfill completado. Total registros actualizados: {total_actualizados}")
+    cur = conn.cursor()
+    total_rows = count_target(cur)
+    offset = 0
+    total_updated = 0
+    try:
+        while True:
+            batch = fetch_batch(cur, offset)
+            if not batch:
+                break
+            for row in batch:
+                pid, titulo, descripcion, tipo_actual = row
+                nueva = detectar_nuevo_tipo(titulo, descripcion)
+                if nueva and nueva != tipo_actual:
+                    cur.execute(
+                        "UPDATE propiedades SET tipo_propiedad=%s WHERE id=%s",
+                        (nueva, pid),
+                    )
+                    total_updated += 1
+            conn.commit()
+            offset += BATCH_SIZE
+            print_progress(offset if offset<total_rows else total_rows, total_rows)
+            logging.debug(f"📝 Batch offset {offset} – acumulados: {total_updated}")
+    except InterfaceError:
+        logging.error("Conexión perdida; reinicia y continúa con offset %s", offset)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
