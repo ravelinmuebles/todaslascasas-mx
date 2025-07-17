@@ -18,6 +18,7 @@ import logging
 from typing import Dict
 import pg8000
 from pg8000.exceptions import InterfaceError
+from importlib import import_module
 
 # Añadir src/ al path para importar modules.*
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -25,6 +26,14 @@ SRC_DIR = os.path.join(ROOT_DIR, 'src')
 sys.path.append(SRC_DIR)
 
 from modules.tipo_propiedad import actualizar_tipo_propiedad  # type: ignore
+
+# Wrapper para reutilizar el detector existente sin duplicar lógica
+tipo_mod = import_module('modules.tipo_propiedad')
+
+
+def detectar_nuevo_tipo(titulo: str, descripcion: str) -> str:
+    texto = f"{titulo or ''} {descripcion or ''}"
+    return tipo_mod.detectar_tipo_por_descripcion(texto) or ''
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("backfill_tipo_propiedad")
