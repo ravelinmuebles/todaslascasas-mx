@@ -20,6 +20,8 @@ from modules.validacion import validar_propiedad_completa
 
 def configurar_logging():
     """Configura el sistema de logging."""
+    # Asegurar que la carpeta 'logs' exista para evitar FileNotFoundError
+    Path('logs').mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
