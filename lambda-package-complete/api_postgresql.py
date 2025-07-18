@@ -12,7 +12,7 @@ PROBLEMAS CORREGIDOS:
 
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
@@ -27,6 +27,8 @@ from passlib.context import CryptContext
 import secrets
 import os
 from fastapi.params import Param  # ↳ para detectar objetos Query/Param
+import httpx
+import urllib.parse
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
@@ -244,6 +246,12 @@ def ejecutar_consulta(query: str, params: tuple = None, fetchall: bool = True):
 
         columnas = [desc[0] for desc in cursor.description] if cursor.description else []
         
+        # Confirmar cambios si la consulta es DML (INSERT/UPDATE/DELETE)
+        _sql = query.strip().lower()
+        is_dml = _sql.startswith("insert") or _sql.startswith("update") or _sql.startswith("delete")
+        if is_dml:
+            conn.commit()
+        
         if fetchall:
             filas = cursor.fetchall()
             resultado = [dict(zip(columnas, fila)) for fila in filas]
@@ -256,6 +264,8 @@ def ejecutar_consulta(query: str, params: tuple = None, fetchall: bool = True):
         
         tiempo_ms = (time.time() - inicio) * 1000
         logger.info(f"Consulta ejecutada en {tiempo_ms:.2f}ms")
+        
+        # (Commit ya aplicado para DML; no se requiere commit adicional aquí)
         
         return resultado, tiempo_ms
     except Exception as e:
@@ -1833,6 +1843,188 @@ async def root():
 async def frontend():
     """Alias para el frontend"""
     return await root()
+
+# ─── GOOGLE OAUTH (NUEVO) ─────────────────────────────────────────
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT = os.getenv('GOOGLE_REDIRECT', 'https://api.todaslascasas.mx/api/auth/google/callback')
+FRONT_URL = os.getenv('FRONT_URL', 'https://todaslascasas.mx/stg/index.html')
+
+# Helpers
+async def _google_exchange_code(code: str):
+    async with httpx.AsyncClient(timeout=10) as client:
+        data = {
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': GOOGLE_REDIRECT,
+        }
+        r = await client.post('https://oauth2.googleapis.com/token', data=data)
+        r.raise_for_status()
+        return r.json()
+
+
+async def _google_get_profile(access_token: str):
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get('https://www.googleapis.com/oauth2/v2/userinfo', headers={'Authorization': f'Bearer {access_token}'})
+        r.raise_for_status()
+        return r.json()
+
+
+# Endpoints
+@app.get('/api/auth/google/login')
+async def google_login():
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail='Google OAuth no configurado')
+    state = secrets.token_urlsafe(16)
+    params = {
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': GOOGLE_REDIRECT,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'access_type': 'online',
+        'state': state,
+        'prompt': 'select_account'
+    }
+    url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
+    return RedirectResponse(url)
+
+
+@app.get('/api/auth/google/callback')
+async def google_callback(code: str = Query(...), state: Optional[str] = None):
+    try:
+        token_data = await _google_exchange_code(code)
+        profile = await _google_get_profile(token_data['access_token'])
+        email = profile.get('email')
+        nombre = profile.get('name')
+        if not email:
+            raise HTTPException(status_code=400, detail='Email no proporcionado por Google')
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT id FROM usuarios WHERE email=%s', (email,))
+        row = cur.fetchone()
+        if row:
+            user_id = row[0]
+        else:
+            cur.execute('INSERT INTO usuarios (nombre, email, created_at) VALUES (%s,%s,NOW()) RETURNING id', (nombre, email))
+            user_id = cur.fetchone()[0]
+            conn.commit()
+        cur.close(); conn.close()
+
+        # Token válido 30 días para no caducar favoritos
+        jwt_token = create_access_token({'sub': email, 'uid': user_id, 'nombre': nombre}, expires_delta=timedelta(days=30))
+        return RedirectResponse(f"{FRONT_URL}?token={jwt_token}")
+    except Exception as e:
+        logger.error(f'Error OAuth Google: {e}')
+        raise HTTPException(status_code=500, detail='Error autenticando con Google')
+
+# Alias legacy sin prefijo /api (compatibilidad con versiones antiguas del front)
+app.add_api_route('/auth/google/login', google_login, methods=['GET'])
+app.add_api_route('/auth/google/callback', google_callback, methods=['GET'])
+
+# ─── CREAR TABLA FAVORITOS SI NO EXISTE ──────────────────────────
+try:
+    conn_init = get_db_connection()
+    cur_init = conn_init.cursor()
+    cur_init.execute("""
+    CREATE TABLE IF NOT EXISTS favoritos (
+        id SERIAL PRIMARY KEY,
+        usuario_id INT REFERENCES usuarios(id) ON DELETE CASCADE,
+        propiedad_id TEXT NOT NULL,
+        carpeta TEXT DEFAULT 'General',
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(usuario_id, propiedad_id)
+    );
+    """)
+    conn_init.commit()
+    cur_init.close(); conn_init.close()
+except Exception as e:
+    logger.error(f"No se pudo verificar/crear tabla favoritos: {e}")
+
+# ─── ENDPOINTS FAVORITOS ───────────────────────────────────────
+class Favorito(BaseModel):
+    propiedad_id: str
+    carpeta: Optional[str] = 'General'
+
+@app.get('/api/favorites')
+async def listar_favoritos(current_user: Usuario = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    try:
+        query = "SELECT propiedad_id, carpeta FROM favoritos WHERE usuario_id = %s"
+        rows, _ = ejecutar_consulta(query, (current_user.id,))
+        favorites = [r['propiedad_id'] for r in rows]
+        folders = list({r['carpeta'] for r in rows}) or ['General']
+        by_folder = {}
+        for r in rows:
+            by_folder.setdefault(r['carpeta'] or 'General', []).append(r['propiedad_id'])
+        return {"favorites": favorites, "favoriteFolders": folders, "favoritesByFolder": by_folder}
+    except Exception as e:
+        logger.error(f"Error listando favoritos: {e}")
+        raise HTTPException(status_code=500, detail="Error listando favoritos")
+
+@app.post('/api/favorites')
+async def agregar_favorito(fav: Favorito, current_user: Usuario = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    try:
+        # Detectar columnas existentes para construir INSERT robusto
+        try:
+            conn_chk = get_db_connection(); cur_chk = conn_chk.cursor()
+            cur_chk.execute("SELECT column_name FROM information_schema.columns WHERE table_name='favoritos'")
+            cols_present = {r[0] for r in cur_chk.fetchall()}
+            cur_chk.close(); conn_chk.close()
+        except Exception:
+            cols_present = {"usuario_id", "propiedad_id"}  # suposición mínima
+
+        columnas = ["usuario_id", "propiedad_id"]
+        valores  = [current_user.id, fav.propiedad_id]
+        placeholders = "%s,%s"
+
+        # 'carpeta'   → opcional pero útil; si no existe se omite
+        if "carpeta" in cols_present:
+            columnas.append("carpeta"); valores.append(fav.carpeta); placeholders += ",%s"
+
+        # 'user_email' → opcional
+        if "user_email" in cols_present:
+            columnas.append("user_email"); valores.append(current_user.email); placeholders += ",%s"
+
+        # ON CONFLICT depende de que exista columna 'carpeta'; si no, solo mantener registro
+        on_conflict = "DO NOTHING" if "carpeta" not in cols_present else "DO UPDATE SET carpeta = EXCLUDED.carpeta"
+
+        query = f"INSERT INTO favoritos ({','.join(columnas)}) VALUES ({placeholders}) ON CONFLICT (usuario_id, propiedad_id) {on_conflict} RETURNING usuario_id;"
+        ejecutar_consulta(query, tuple(valores), fetchall=False)
+        return {"mensaje":"Favorito guardado"}
+    except Exception as e:
+        logger.error(f"Error guardando favorito: {e}")
+        raise HTTPException(status_code=500, detail="Error guardando favorito")
+
+@app.delete('/api/favorites/{propiedad_id}')
+async def eliminar_favorito(propiedad_id: str, current_user: Usuario = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    try:
+        ejecutar_consulta("DELETE FROM favoritos WHERE usuario_id=%s AND propiedad_id=%s", (current_user.id, propiedad_id), fetchall=False)
+        return {"mensaje":"Favorito eliminado"}
+    except Exception as e:
+        logger.error(f"Error eliminando favorito: {e}")
+        raise HTTPException(status_code=500, detail="Error eliminando favorito")
+
+# ─── ENDPOINT DELETE PROPERTY (admin) ───────────────────────────
+@app.delete('/api/properties/{propiedad_id}')
+async def eliminar_propiedad_bd(propiedad_id: str, current_user: Usuario = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    if not current_user.es_admin:
+        raise HTTPException(status_code=403, detail="Permiso denegado")
+    try:
+        ejecutar_consulta("DELETE FROM propiedades WHERE id=%s", (propiedad_id,), fetchall=False)
+        return {"mensaje":"Propiedad eliminada"}
+    except Exception as e:
+        logger.error(f"Error eliminando propiedad: {e}")
+        raise HTTPException(status_code=500, detail="Error eliminando propiedad")
 
 if __name__ == "__main__":
     import uvicorn

@@ -28,7 +28,8 @@
     <!-- Versión v3.3.21-37 - fix condición de carrera en contador resultados - 16/07/2025 -->
     <!-- Versión v3.3.24 - niveles fuerza tipo casa - 16/07/2025 -->
     <!-- Versión v3.3.25 - recámara PB envía param y limpia terrenos - 17/07/2025 -->
-    <!-- Versión v3.3.26 - filtros Documentación (escrituras/cesión/crédito) - 17/07/2025 -->
+    <!-- Versión v3.3.28 - fix favoritos set y modal - 18/07/2025 -->
+    <!-- Versión v3.3.30 - commit automático BD + loadFavorites early - 18/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -769,7 +770,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.26</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.30</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -827,8 +828,8 @@
                     </div>
                     <!-- Botón para aplicar explícitamente el rango de precios -->
                     <button id="apply-price-btn" class="btn btn-primary" style="width:100%;margin-top:6px;">Aplicar precio</button>
-                 </div>
-                    
+                    </div>
+
             <!-- Tipo de Operación -->
             <div class="filter-group">
                 <label class="filter-label">Tipo de Operación</label>
@@ -1128,7 +1129,7 @@
         // Iniciar Login con Google (redirección simple al backend)
         function iniciarLoginGoogle(){
           // Abrir flujo OAuth en misma pestaña
-          const url=`${API_BASE_URL}/auth/google/login`;
+          const url=`${API_BASE_URL}/api/auth/google/login`;
           console.log('🔐 Redirigiendo a Google OAuth:',url);
           window.location.href=url;
         }
@@ -1156,6 +1157,24 @@
 
         // INICIALIZACIÓN
         document.addEventListener('DOMContentLoaded', function() {
+            // Si viene token en query (?token=xxx) guardar y limpiar URL
+            const qp=new URLSearchParams(window.location.search);
+            if(qp.get('token')){
+                localStorage.setItem('todas_token', qp.get('token'));
+                // Establecer UI inmediatamente con la información del token
+                try{
+                    const parts = qp.get('token').split('.');
+                    if(parts.length===3){
+                        const payload = JSON.parse(atob(parts[1]));
+                        if(payload.nombre||payload.sub){
+                            document.getElementById('userName').textContent = payload.nombre||payload.sub;
+                            document.getElementById('userInfo').classList.add('show');
+                            document.getElementById('googleLoginBtn').style.display = 'none';
+                        }
+                    }
+                }catch(e){console.warn('No se pudo decodificar token',e);}                
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
             initializeFilters();
             checkAuth();
             loadProperties(1, currentLimit, {}); // carga inicial sin filtros
@@ -1252,7 +1271,7 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                const data = await response.json();
+                        const data = await response.json();
                 // Si esta respuesta no corresponde a la solicitud más reciente, ignorar
                 if (requestId !== currentRequestId) {
                     console.warn('⚠️ Respuesta descartada por estar desfasada');
@@ -1624,7 +1643,7 @@
                           </div>
                           
                           <div class="property-actions">
-                              <button class="btn-favorite" onclick="toggleFavorite('${property.id}')" style="font-size:1.3rem;color:${favoritesSet.has(property.id)?'#facc15':'#d1d5db'}">
+                              <button class="btn-favorite" onclick="toggleFavorite('${property.id}')" style="font-size:1.3rem;color:${favoritesSet.has(String(property.id))?'#facc15':'#d1d5db'}">
                                   ⭐
                               </button>
                               ${isAdmin ? `<button class="btn-delete" onclick="deleteProperty('${property.id}')" style="font-size:1.2rem;color:#ef4444;margin-left:4px;" title="Borrar publicación">🗑️</button>` : ''}
@@ -1645,12 +1664,12 @@
 
         // TOGGLE FAVORITO
         async function toggleFavorite(propertyId) {
-            const isFav = favoritesSet.has(propertyId);
+            const isFav = favoritesSet.has(String(propertyId));
             if(isFav){
                 try{
-                    const resp = await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE',credentials:'include'});
+                    const resp = await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE', headers: authHeaders()});
                     if(resp.ok){
-                        favoritesSet.delete(propertyId);
+                        favoritesSet.delete(String(propertyId));
                         // quitar de todas las carpetas locales
                         for(const f in favorites){favorites[f]=favorites[f].filter(id=>id!==propertyId);} 
                         localStorage.setItem('favorites', JSON.stringify(favorites));
@@ -1689,9 +1708,16 @@
             localStorage.setItem('favorites', JSON.stringify(favorites));
 
             try{
-                const resp=await fetch(`${API_BASE_URL}/api/favorites`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({property_id:currentPropertyToSave})});
+                const resp=await fetch(`${API_BASE_URL}/api/favorites`, {method:'POST', headers:{...authHeaders(), 'Content-Type':'application/json'}, body:JSON.stringify({propiedad_id:currentPropertyToSave, carpeta: sel})});
+                if(!resp.ok){
+                    const txt = await resp.text();
+                    alert('Error guardando favorito: '+txt);
+                    console.error('Respuesta backend:', txt);
+                }
                 if(resp.ok){
-                    favoritesSet.add(currentPropertyToSave);
+                    favoritesSet.add(String(currentPropertyToSave));
+                    // sincronzar favoritos desde backend
+                    await loadFavorites();
                     closeModal('selectFolderModal');
                     renderProperties();
                 }
@@ -1727,7 +1753,7 @@
             const items=favorites[currentFavoritesFolder]||[];
             if(items.length===0){list.innerHTML='<p>Sin favoritos en esta carpeta.</p>';return;}
             const cards=items.map(id=>{
-                const prop=allProperties.find(p=>p.id===id)||{};
+                const prop=allProperties.find(p=>String(p.id)===String(id))||{};
                 const img=(prop.imagen_url|| (Array.isArray(prop.imagenes)&&prop.imagenes.length?prop.imagenes[0]:null)) || 'https://todaslascasas-imagenes.s3.amazonaws.com/Imagen_no_disponible.jpg';
                 const titulo=`${prop.tipo_propiedad||'Propiedad'} – ${prop.ciudad||''}`;
                 const ciudad=prop.ciudad||'';
@@ -1742,8 +1768,8 @@
         async function removeFavorite(propertyId, folder){
             favorites[folder]= (favorites[folder]||[]).filter(id=>id!==propertyId);
             localStorage.setItem('favorites', JSON.stringify(favorites));
-            favoritesSet.delete(propertyId);
-            await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE', credentials:'include'}).catch(console.error);
+            favoritesSet.delete(String(propertyId));
+            await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE', headers: authHeaders()}).catch(console.error);
             renderFavoritesList();
             renderProperties();
         }
@@ -1976,19 +2002,21 @@
         }
 
         function logout() {
-            // Elimina datos locales
-            localStorage.removeItem('userToken');
-            localStorage.removeItem('userData');
-            localStorage.removeItem('userName');
-            localStorage.removeItem('userEmail');
+            // Borrar token y datos almacenados
+            localStorage.removeItem('todas_token');
+            localStorage.removeItem('favorites');
+            localStorage.removeItem('favoriteFolders');
+            favoritesSet.clear();
+            favorites = {};
+            favoriteFolders = ['General'];
 
             // Limpia UI inmediatamente
             document.getElementById('userName').textContent = '';
-            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('userInfo').classList.remove('show');
             document.getElementById('googleLoginBtn').style.display = 'inline-block';
 
-            // Redirige al backend para borrar cookie
-            window.location.href = `${API_BASE_URL}/auth/google/logout?next=/`;
+            // Recargar página para refrescar estado (no se usan cookies servidor)
+            window.location.reload();
         }
 
         // Click fuera del modal para cerrar
@@ -2028,11 +2056,28 @@
 
         // Verificar sesión y mostrar nombre de usuario
         async function checkAuth(){
+            // 1) Revisar token local primero
+            const token = localStorage.getItem('todas_token');
+            if(token){
+                try{
+                    const payload = JSON.parse(atob(token.split('.')[1]||''));
+                    const email = payload.sub||'';
+                    const nombre = payload.nombre||email;
+                    document.getElementById('userName').textContent = nombre;
+                    document.getElementById('userInfo').classList.add('show');
+                    document.getElementById('googleLoginBtn').style.display = 'none';
+                    isAdmin = email.endsWith('@todaslascasas.mx') || email==='pabloravel@gmail.com';
+                    await loadFavorites();
+                    if(allProperties.length>0){renderProperties();}
+                    return; // Ya estamos logueados
+                }catch(e){console.warn('Token local inválido',e);} 
+            }
+            // 2) Si no hay token válido, intentar endpoint legacy (por compatibilidad)
             try{
-                const resp = await fetch(`${API_BASE_URL}/auth/me`, {credentials:'include'});
+                const resp = await fetch(`${API_BASE_URL}/api/auth/me`, {headers:{'Authorization':`Bearer ${token}`}});
                 if(resp.ok){
                     const data = await resp.json();
-                    document.getElementById('userName').textContent = data.name || data.email || 'Usuario';
+                    document.getElementById('userName').textContent = data.nombre || data.email || 'Usuario';
                     document.getElementById('userInfo').classList.add('show');
                     document.getElementById('googleLoginBtn').style.display = 'none';
                     await loadFavorites();
@@ -2044,21 +2089,27 @@
             }
         }
 
+        const authHeaders = ()=>{
+            const t = localStorage.getItem('todas_token');
+            return t ? { 'Authorization': `Bearer ${t}` } : {};
+        };
+
         async function loadFavorites(){
             try{
-                const resp = await fetch(`${API_BASE_URL}/api/favorites`, {credentials:'include'});
+                const resp = await fetch(`${API_BASE_URL}/api/favorites`, {headers: authHeaders()});
                 if(resp.ok){
                     const data = await resp.json();
-                    favoritesSet = new Set(data.favorites||[]);
-                    // Sincronizar con carpetas locales
-                    (data.favorites||[]).forEach(id=>{
-                        if(!Object.values(favorites).some(arr=>arr.includes(id))){
-                            if(!favorites['General']) favorites['General']=[];
-                            favorites['General'].push(id);
-                        }
-                    });
+                    favoriteFolders = (data.favoriteFolders||['General']);
+                    favorites = data.favoritesByFolder || {};
+                    // Asegurar carpeta General
+                    if(!favoriteFolders.includes('General')) favoriteFolders.push('General');
+                    favorites['General'] = favorites['General'] || [];
+                    // Sincronizar Set
+                    favoritesSet = new Set((data.favorites||[]).map(id=>String(id)));
                     localStorage.setItem('favorites', JSON.stringify(favorites));
                     localStorage.setItem('favoriteFolders', JSON.stringify(favoriteFolders));
+                    // Si la grilla ya está pintada, refrescar colores
+                    if(allProperties.length>0){renderProperties();}
                 }
             }catch(e){console.warn('No favorites',e);}  
          }
@@ -2081,12 +2132,12 @@
             if(!isAdmin){alert('Acceso restringido');return;}
             if(!confirm('¿Eliminar la publicación '+id+' de forma permanente?')) return;
             try{
-                const resp = await fetch(`${API_BASE_URL}/api/properties/${id}`, {method:'DELETE', credentials:'include'});
+                const resp = await fetch(`${API_BASE_URL}/api/properties/${id}`, {method:'DELETE', headers: authHeaders()});
                 if(resp.ok){
                     // quitar de arrays locales
                     allProperties = allProperties.filter(p=>p.id!==id);
                     filteredProperties = filteredProperties.filter(p=>p.id!==id);
-                    favoritesSet.delete(id);
+                    favoritesSet.delete(String(id));
                     for(const f in favorites){favorites[f]=favorites[f].filter(x=>x!==id);} 
                     renderProperties();
                     alert('Propiedad eliminada');
