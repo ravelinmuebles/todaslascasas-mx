@@ -30,7 +30,7 @@
     <!-- Versión v3.3.25 - recámara PB envía param y limpia terrenos - 17/07/2025 -->
     <!-- Versión v3.3.28 - fix favoritos set y modal - 18/07/2025 -->
     <!-- Versión v3.3.30 - commit automático BD + loadFavorites early - 18/07/2025 -->
-    <!-- Versión v3.3.32 - mejoras visuales favoritos (color, ID, formato precio) - 18/07/2025 -->
+    <!-- Versión v3.3.33 - color estrella coincide con hover (#facc15) - 18/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -601,14 +601,11 @@
         }
 
         .btn-favorite:hover {
-            background: #fef3c7;
-            border-color: #f59e0b;
+            background: #facc15;
         }
 
         .btn-favorite.active {
-            background: #fbbf24;
-            border-color: #f59e0b;
-            color: white;
+            background: #facc15;
         }
 
         /* justo después de .btn-favorite style block */
@@ -774,7 +771,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.32</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.33</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
