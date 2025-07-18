@@ -782,7 +782,7 @@ def main():
 def actualizar_html_con_conteo(conteo_propiedades):
     """Actualiza el HTML con el conteo real de propiedades"""
     try:
-        html_file = "frontend_desarrollo_postgresql_v2_con_diseno_original.html"
+        html_file = "index_s3_latest.html"
         print(f"📝 Actualizando {html_file} con {conteo_propiedades} propiedades...")
         
         # Crear respaldo del HTML
