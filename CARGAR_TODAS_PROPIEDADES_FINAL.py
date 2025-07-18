@@ -249,6 +249,7 @@ def cargar_todas_propiedades_final():
         
         print("📥 Insertando TODAS las propiedades con estructura correcta...")
         
+        total_propiedades = len(propiedades)
         insertados = 0
         errores = 0
         filtrados = 0
@@ -343,8 +344,11 @@ def cargar_todas_propiedades_final():
                 
                 if exito:
                     insertados += 1
-                    if insertados % 500 == 0:
-                        print(f"📊 Insertados: {insertados}")
+                    # Actualizar barra de progreso cada 100 inserciones
+                    if insertados % 100 == 0 or insertados == total_propiedades:
+                        pct = (insertados / total_propiedades) * 100
+                        sys.stdout.write(f"\r📊 Progreso: {insertados}/{total_propiedades} ({pct:.1f}%)")
+                        sys.stdout.flush()
                 else:
                     errores += 1
                     errores_detalle.append(f"{prop_id}: {error}")
