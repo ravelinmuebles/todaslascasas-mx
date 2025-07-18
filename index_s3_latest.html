@@ -30,6 +30,7 @@
     <!-- Versión v3.3.25 - recámara PB envía param y limpia terrenos - 17/07/2025 -->
     <!-- Versión v3.3.28 - fix favoritos set y modal - 18/07/2025 -->
     <!-- Versión v3.3.30 - commit automático BD + loadFavorites early - 18/07/2025 -->
+    <!-- Versión v3.3.32 - mejoras visuales favoritos (color, ID, formato precio) - 18/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -610,6 +611,9 @@
             color: white;
         }
 
+        /* justo después de .btn-favorite style block */
+        .btn-favorite.active{color:#facc15;}
+
         /* LOADING Y ESTADOS */
         .loading {
             text-align: center;
@@ -770,7 +774,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.30</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.32</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -1643,7 +1647,7 @@
                           </div>
                           
                           <div class="property-actions">
-                              <button class="btn-favorite" onclick="toggleFavorite('${property.id}')" style="font-size:1.3rem;color:${favoritesSet.has(String(property.id))?'#facc15':'#d1d5db'}">
+                              <button class="btn-favorite ${favoritesSet.has(String(property.id))?'active':''}" onclick="toggleFavorite('${property.id}', event)" style="font-size:1.3rem;">
                                   ⭐
                               </button>
                               ${isAdmin ? `<button class="btn-delete" onclick="deleteProperty('${property.id}')" style="font-size:1.2rem;color:#ef4444;margin-left:4px;" title="Borrar publicación">🗑️</button>` : ''}
@@ -1663,8 +1667,9 @@
         }
 
         // TOGGLE FAVORITO
-        async function toggleFavorite(propertyId) {
+        async function toggleFavorite(propertyId, event) {
             const isFav = favoritesSet.has(String(propertyId));
+            const btn = event ? event.currentTarget : null;
             if(isFav){
                 try{
                     const resp = await fetch(`${API_BASE_URL}/api/favorites/${propertyId}`, {method:'DELETE', headers: authHeaders()});
@@ -1674,6 +1679,7 @@
                         for(const f in favorites){favorites[f]=favorites[f].filter(id=>id!==propertyId);} 
                         localStorage.setItem('favorites', JSON.stringify(favorites));
                         renderProperties();
+                        if(btn){btn.classList.remove('active');}
                     }
                 }catch(e){console.error('Favorite delete error',e);} 
             } else {
@@ -1720,6 +1726,7 @@
                     await loadFavorites();
                     closeModal('selectFolderModal');
                     renderProperties();
+                    if(btn){btn.classList.add('active');}
                 }
             }catch(e){console.error('Add favorite error',e);} 
         }
@@ -1757,10 +1764,15 @@
                 const img=(prop.imagen_url|| (Array.isArray(prop.imagenes)&&prop.imagenes.length?prop.imagenes[0]:null)) || 'https://todaslascasas-imagenes.s3.amazonaws.com/Imagen_no_disponible.jpg';
                 const titulo=`${prop.tipo_propiedad||'Propiedad'} – ${prop.ciudad||''}`;
                 const ciudad=prop.ciudad||'';
-                let precio=prop.precio||'';
-                if(precio && !precio.trim().startsWith('$')) precio=`$${precio}`;
+                let precio = (prop.precio!==undefined && prop.precio!==null) ? String(prop.precio) : '';
+                // Formatear con comas
+                if(precio){
+                    const num = parseFloat(precio.replace(/[^0-9.]/g,''));
+                    if(!isNaN(num)) precio = `$${num.toLocaleString('es-MX')}`;
+                    else if(!precio.trim().startsWith('$')) precio = `$${precio}`;
+                }
                 const url=prop.url_original||'#';
-                return `<div class="favorite-h-card"><a href="${url}" target="_blank"><img src="${img}" alt="thumb"></a><div class="fh-info"><h4><a href="${url}" target="_blank" style="text-decoration:none;color:#111827;">${titulo}</a></h4><p>${ciudad}</p><p class="fh-price">${precio}</p><div class="fh-actions"><button class="btn btn-secondary" onclick="viewProperty('${url}')">Abrir ficha</button><button class="btn-remove" onclick="removeFavorite('${id}','${currentFavoritesFolder}')">Eliminar ✖</button></div></div></div>`;
+                return `<div class="favorite-h-card"><a href="${url}" target="_blank"><img src="${img}" alt="thumb"></a><div class="fh-info"><small style="color:#6b7280;font-size:0.75rem;">ID: ${id}</small><h4><a href="${url}" target="_blank" style="text-decoration:none;color:#111827;">${titulo}</a></h4><p>${ciudad}</p><p class="fh-price">${precio}</p><div class="fh-actions"><button class="btn btn-secondary" onclick="viewProperty('${url}')">Abrir ficha</button><button class="btn-remove" onclick="removeFavorite('${id}','${currentFavoritesFolder}')">Eliminar ✖</button></div></div></div>`;
             }).join('');
             list.innerHTML=cards;
         }
