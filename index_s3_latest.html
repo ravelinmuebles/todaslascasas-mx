@@ -31,7 +31,7 @@
     <!-- Versión v3.3.28 - fix favoritos set y modal - 18/07/2025 -->
     <!-- Versión v3.3.30 - commit automático BD + loadFavorites early - 18/07/2025 -->
     <!-- Versión v3.3.33 - color estrella coincide con hover (#facc15) - 18/07/2025 -->
-    <!-- Versión v3.3.34 - color estrella vuelve a #fbbf24 + fix botón borrar - 18/07/2025 -->
+    <!-- Versión v3.3.35 - color estrella #fcf3cc y confirmación delete - 18/07/2025 -->
     <style>
         * {
             margin: 0;
@@ -602,15 +602,15 @@
         }
 
         .btn-favorite:hover {
-            background: #fbbf24;
+            color: #fcf3cc;
         }
 
         .btn-favorite.active {
-            background: #fbbf24;
+            color: #fcf3cc;
         }
 
         /* justo después de .btn-favorite style block */
-        .btn-favorite.active{color:#fbbf24;}
+        .btn-favorite.active{color:#fcf3cc;}
 
         /* LOADING Y ESTADOS */
         .loading {
@@ -772,7 +772,7 @@
     <!-- HEADER -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.34</span></div>
+            <div class="logo">📍 Todas las Casas <span class="version-badge">v3.3.35</span></div>
             <div class="header-actions">
                 <div class="user-info" id="userInfo">
                     <span id="userName">Usuario</span>
@@ -2153,7 +2153,7 @@
                     alert('Propiedad eliminada');
                 } else {
                     try{
-                        const data = await resp.json();
+                    const data = await resp.json();
                         alert('Error: '+(data.error||JSON.stringify(data)));
                     }catch(e){
                         const txt = await resp.text();
