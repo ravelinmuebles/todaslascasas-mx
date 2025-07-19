@@ -264,7 +264,16 @@ def cargar_todas_propiedades_final():
                 # Datos básicos
                 titulo = prop.get('titulo', '')
                 descripcion = prop.get('descripcion', '')
-                precio_str = prop.get('precio', '0')
+                
+                # ----- PRECIO -----
+                precio_field = prop.get('precio')
+                if isinstance(precio_field, dict):
+                    precio_val = precio_field.get('valor') or limpiar_precio(precio_field.get('texto'))
+                else:
+                    precio_val = limpiar_precio(precio_field)
+
+                precio = precio_val or 0
+
                 ciudad = prop.get('ciudad', '')
                 link = prop.get('link', '')
                 
@@ -280,16 +289,24 @@ def cargar_todas_propiedades_final():
                 else:
                     ciudad = 'Ubicación no especificada'
                 
-                # Procesar precio
-                precio = limpiar_precio(precio_str)
-                
                 # Determinar tipo de operación
-                if 'renta' in descripcion.lower() or 'alquiler' in descripcion.lower():
-                    tipo_operacion = 'Renta'
-                elif 'venta' in descripcion.lower() or 'vende' in descripcion.lower():
-                    tipo_operacion = 'Venta'
+                tipo_operacion_field = prop.get('tipo_operacion')
+                if isinstance(tipo_operacion_field, dict):
+                    tipo_operacion = (
+                        tipo_operacion_field.get('tipo_detectado') or
+                        tipo_operacion_field.get('tipo') or 'Desconocido'
+                    )
+                elif isinstance(tipo_operacion_field, str):
+                    tipo_operacion = tipo_operacion_field
                 else:
                     tipo_operacion = 'Desconocido'
+
+                # Fallback a descripción si sigue desconocido
+                if tipo_operacion == 'Desconocido':
+                    if 'renta' in descripcion.lower() or 'alquiler' in descripcion.lower():
+                        tipo_operacion = 'Renta'
+                    elif 'venta' in descripcion.lower() or 'vende' in descripcion.lower():
+                        tipo_operacion = 'Venta'
                 
                 # Determinar tipo de propiedad
                 tipo_propiedad = determinar_tipo_propiedad(titulo, descripcion)
@@ -299,19 +316,18 @@ def cargar_todas_propiedades_final():
                 amenidades = extraer_amenidades(descripcion)
                 
                 # Imagen
-                imagen_info = prop.get('imagen_portada', {})
+                imagen_info = prop.get('imagen_portada')
                 imagenes_array = []
+                ruta_imagen = None
                 if isinstance(imagen_info, dict):
-                    imagen_url = imagen_info.get('nombre_archivo', '')
-                    if imagen_url:
-                        # Extraer fecha del nombre de archivo
-                        fecha_match = re.search(r'(\d{4}-\d{2}-\d{2})', imagen_url)
-                        if fecha_match:
-                            fecha = fecha_match.group(1)
-                            imagen_completa = f"resultados/{fecha}/{imagen_url}"
-                        else:
-                            imagen_completa = f"resultados/{imagen_url}"
-                        imagenes_array.append(imagen_completa)
+                    ruta_imagen = imagen_info.get('ruta_relativa') or imagen_info.get('nombre_archivo')
+                elif isinstance(imagen_info, str):
+                    ruta_imagen = imagen_info
+
+                if ruta_imagen:
+                    if not ruta_imagen.startswith('resultados/'):
+                        ruta_imagen = f"resultados/{ruta_imagen}"
+                    imagenes_array.append(ruta_imagen)
                 
                 # Preparar datos para inserción (estructura PostgreSQL correcta)
                 datos = (
