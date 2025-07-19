@@ -1513,7 +1513,7 @@ async def api_propiedades_compatibilidad(
                 descripcion,
                 CASE 
                   WHEN (imagenes->>0) ~ '^(http|https)://' THEN (imagenes->>0)
-                  WHEN (imagenes->>0) IS NOT NULL AND (imagenes->>0) <> '' THEN 'https://todaslascasas-imagenes.s3.amazonaws.com/' || (imagenes->>0)
+                  WHEN (imagenes->>0) IS NOT NULL AND (imagenes->>0) <> '' THEN 'https://todaslascasas-imagenes.s3.amazonaws.com/' || regexp_replace((imagenes->>0),'^resultados/','')
                   ELSE ''
                 END AS imagen_url,
                 created_at
