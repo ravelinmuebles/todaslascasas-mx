@@ -192,27 +192,38 @@ def limpiar_ciudad(ciudad: str) -> Optional[str]:
     return None
 
 def generar_url_imagen(nombre_imagen: str) -> str:
-    """Normaliza la ruta de la imagen y siempre devuelve una URL absoluta al bucket S3."""
+    """Devuelve la URL correcta a la miniatura en S3.
+
+    Reglas:
+    1. Si viene vacía → placeholder.
+    2. Si ya es URL http(s) → devolverla sin cambios.
+    3. Remover prefijo "resultados/" si existe.
+    4. Asegurar prefijo yyyy-mm-dd/ (lo extrae del nombre); si ya lo tiene, se respeta.
+    5. Armar URL absoluta al bucket.
+    """
+
     if not nombre_imagen:
         return "https://via.placeholder.com/400x300/e2e8f0/64748b?text=Sin+Imagen"
 
-    # 1) Si ya es una URL absoluta (http/https) devolverla tal cual
+    # 1) URL absoluta ya válida
     if nombre_imagen.startswith("http://") or nombre_imagen.startswith("https://"):
         return nombre_imagen
 
-    # 2) Quitar prefijo "resultados/" si existe
-    if nombre_imagen.startswith("resultados/"):
-        nombre_imagen = nombre_imagen[len("resultados/"):]
+    ruta = nombre_imagen.strip()
 
-    # 3) Asegurar que el nombre_incluye la fecha como primer directorio (yyyy-mm-dd/..)
-    if not re.match(r"^\d{4}-\d{2}-\d{2}/", nombre_imagen):
-        match = re.search(r"(\d{4}-\d{2}-\d{2})", nombre_imagen)
-        if match:
-            fecha = match.group(1)
-            nombre_imagen = f"{fecha}/{nombre_imagen}"
+    # 2) Remover prefijo resultados/
+    if ruta.startswith("resultados/"):
+        ruta = ruta[len("resultados/"):]
 
-    # 4) Construir URL absoluta al bucket
-    return f"https://todaslascasas-imagenes.s3.amazonaws.com/{nombre_imagen.strip('/')}"
+    # 3) Prepend fecha si no la tiene al inicio
+    if not re.match(r"^\d{4}-\d{2}-\d{2}/", ruta):
+        m = re.search(r"(\d{4}-\d{2}-\d{2})", ruta)
+        if m:
+            fecha = m.group(1)
+            ruta = f"{fecha}/{ruta}"
+
+    # 4) URL final
+    return f"https://todaslascasas-imagenes.s3.amazonaws.com/{ruta.strip('/')}"
 
 # Conexión a base de datos
 def get_db_connection():
