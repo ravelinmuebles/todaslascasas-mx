@@ -252,12 +252,16 @@ def ejecutar_consulta(query: str, params: tuple = None, fetchall: bool = True):
         if is_dml:
             conn.commit()
         
-        if fetchall:
-            filas = cursor.fetchall()
-            resultado = [dict(zip(columnas, fila)) for fila in filas]
+        if cursor.description:  # Hay result set (SELECT)
+            if fetchall:
+                filas = cursor.fetchall()
+                resultado = [dict(zip(columnas, fila)) for fila in filas]
+            else:
+                fila = cursor.fetchone()
+                resultado = dict(zip(columnas, fila)) if fila else None
         else:
-            fila = cursor.fetchone()
-            resultado = dict(zip(columnas, fila)) if fila else None
+            # Operación DML: no hay datos que devolver
+            resultado = None
         
         cursor.close()
         conn.close()
@@ -313,12 +317,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         resultado, _ = ejecutar_consulta(query, (email,), fetchall=False)
         if resultado:
             user_data = dict(resultado)
+            is_admin = user_data.get('es_admin', False)
+            ALLOWED_ADMINS = {'pabloravel@gmail.com','admin@todaslascasas.mx'}
+            if user_data['email'] in ALLOWED_ADMINS:
+                is_admin = True
             return Usuario(
                 id=user_data['id'],
                 nombre=user_data['nombre'],
                 email=user_data['email'],
                 telefono=user_data.get('telefono'),
-                es_admin=user_data.get('es_admin', False),
+                es_admin=is_admin,
                 created_at=user_data['created_at']
             )
     except Exception as e:
@@ -1495,9 +1503,21 @@ async def api_propiedades_compatibilidad(
         # Consulta para obtener propiedades
         offset = (pagina - 1) * por_pagina
         data_query = f"""
-            SELECT id, titulo, precio, tipo_operacion, tipo_propiedad, 
-                   ciudad, descripcion, created_at
-            FROM propiedades 
+            SELECT 
+                id,
+                titulo,
+                COALESCE(NULLIF(precio,0), precio_numerico, 0) AS precio,
+                tipo_operacion,
+                tipo_propiedad,
+                ciudad,
+                descripcion,
+                CASE 
+                  WHEN (imagenes->>0) ~ '^(http|https)://' THEN (imagenes->>0)
+                  WHEN (imagenes->>0) IS NOT NULL AND (imagenes->>0) <> '' THEN 'https://todaslascasas-imagenes.s3.amazonaws.com/' || (imagenes->>0)
+                  ELSE ''
+                END AS imagen_url,
+                created_at
+            FROM propiedades
             {where_clause}
             ORDER BY created_at DESC 
             LIMIT %s OFFSET %s
@@ -1516,8 +1536,8 @@ async def api_propiedades_compatibilidad(
                 "tipo_propiedad": row[4] or "",
                 "ciudad": row[5] or "",
                 "descripcion": row[6] or "",
-                "imagen_url": "",  # Campo no existe en la BD
-                "created_at": row[7].isoformat() if row[7] else ""
+                "imagen_url": row[7] or "",
+                "created_at": row[8].isoformat() if row[8] else ""
             })
         
         cur.close()
