@@ -192,30 +192,27 @@ def limpiar_ciudad(ciudad: str) -> Optional[str]:
     return None
 
 def generar_url_imagen(nombre_imagen: str) -> str:
-    """Normaliza la ruta de la imagen para que el frontend pueda resolverla."""
+    """Normaliza la ruta de la imagen y siempre devuelve una URL absoluta al bucket S3."""
     if not nombre_imagen:
         return "https://via.placeholder.com/400x300/e2e8f0/64748b?text=Sin+Imagen"
-    
+
     # 1) Si ya es una URL absoluta (http/https) devolverla tal cual
     if nombre_imagen.startswith("http://") or nombre_imagen.startswith("https://"):
         return nombre_imagen
-    
-    # 2) Si ya viene con la fecha como primer segmento (2025-07-06/....) dejarla igual
-    if re.match(r"^\d{4}-\d{2}-\d{2}/", nombre_imagen):
-        return nombre_imagen
 
-    # 3) Si empieza con "resultados/", quitar ese prefijo para que quede relativo al bucket
+    # 2) Quitar prefijo "resultados/" si existe
     if nombre_imagen.startswith("resultados/"):
-        return nombre_imagen[len("resultados/"):]
+        nombre_imagen = nombre_imagen[len("resultados/"):]
 
-    # 4) Extraer fecha (yyyy-mm-dd) del nombre y anteponerla
-    match = re.search(r"(\d{4}-\d{2}-\d{2})", nombre_imagen)
-    if match:
-        fecha = match.group(1)
-        return f"{fecha}/{nombre_imagen}"
-    
-    # 5) Como último recurso, devolver sin modificar
-    return nombre_imagen
+    # 3) Asegurar que el nombre_incluye la fecha como primer directorio (yyyy-mm-dd/..)
+    if not re.match(r"^\d{4}-\d{2}-\d{2}/", nombre_imagen):
+        match = re.search(r"(\d{4}-\d{2}-\d{2})", nombre_imagen)
+        if match:
+            fecha = match.group(1)
+            nombre_imagen = f"{fecha}/{nombre_imagen}"
+
+    # 4) Construir URL absoluta al bucket
+    return f"https://todaslascasas-imagenes.s3.amazonaws.com/{nombre_imagen.strip('/')}"
 
 # Conexión a base de datos
 def get_db_connection():
